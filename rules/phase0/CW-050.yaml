@@ -1,0 +1,35 @@
+rule_id: CW-050
+name: multiple_external_domains
+description: >
+  Detects 3+ distinct external network calls in a single trace.
+  Agents typically communicate with a small set of known endpoints —
+  contacting many external domains may indicate data exfiltration
+  across multiple targets or C2 communication.
+severity: high
+category: data_exfiltration
+layer: 1
+phase: 0
+requires_baseline: false
+safe_mode_compatible: true
+
+match:
+  count:
+    field: actions[*]
+    conditions:
+      - field: tool_category
+        equals: "network"
+      - field: semantic_flags.is_external
+        equals: true
+    min_distinct: 3
+  logic: ALL
+
+response:
+  alert: true
+  recommended_action: >
+    Review external endpoints contacted. Determine if the agent's
+    task legitimately requires communication with multiple external services.
+
+tags:
+  - data_exfiltration
+  - multi_target
+  - c2_indicator

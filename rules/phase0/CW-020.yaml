@@ -1,0 +1,28 @@
+rule_id: CW-020
+name: extreme_chain_length
+description: >
+  Detects traces with an unusually high number of tool calls (>50).
+  Static threshold — no baseline needed. May indicate runaway agent
+  loops or prompt injection causing repetitive tool invocation.
+severity: medium
+category: chain_anomaly
+layer: 1
+phase: 0
+requires_baseline: false
+safe_mode_compatible: true
+
+match:
+  conditions:
+    - field: action_count
+      greater_than: 50
+  logic: ALL
+
+response:
+  alert: true
+  recommended_action: >
+    Check if the agent is stuck in a loop. Review the action sequence
+    for repetitive patterns. Verify the agent has proper termination conditions.
+
+tags:
+  - chain_anomaly
+  - runaway_loop

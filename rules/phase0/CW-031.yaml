@@ -1,0 +1,27 @@
+rule_id: CW-031
+name: sensitive_directory_access
+description: >
+  Detects tool calls accessing sensitive system directories
+  (/etc/, .ssh/, .env, .aws/, /proc/, etc.). Uses semantic flags.
+severity: high
+category: argument_anomaly
+layer: 1
+phase: 0
+requires_baseline: false
+safe_mode_compatible: true
+
+match:
+  conditions:
+    - field: actions[*].semantic_flags.sensitive_dir_match
+      equals: true
+  logic: ALL
+
+response:
+  alert: true
+  recommended_action: >
+    Review which sensitive path was accessed and whether this is expected
+    for the agent's declared intent.
+
+tags:
+  - argument_anomaly
+  - sensitive_access

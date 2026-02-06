@@ -1,0 +1,46 @@
+{
+  "agent_id": "test-summarizer",
+  "agent_type": "summarizer",
+  "task_id": "task_001",
+  "declared_intent": "Summarize Q4 revenue report",
+  "mode": "safe",
+  "actions": [
+    {
+      "sequence_index": 0,
+      "tool_name": "read_file",
+      "tool_category": "read",
+      "semantic_flags": {
+        "sensitive_dir_match": false,
+        "argument_size_bucket": "small",
+        "path_traversal_detected": false
+      },
+      "outcome": {
+        "status": "success",
+        "error_class": null,
+        "response_size_bucket": "large"
+      },
+      "timestamp": "2025-06-15T10:30:00Z",
+      "latency_ms": 120
+    },
+    {
+      "sequence_index": 1,
+      "tool_name": "generate_text",
+      "tool_category": "execute",
+      "semantic_flags": {
+        "argument_size_bucket": "medium"
+      },
+      "outcome": {
+        "status": "success",
+        "error_class": null,
+        "response_size_bucket": "medium"
+      },
+      "timestamp": "2025-06-15T10:30:02Z",
+      "latency_ms": 1850
+    }
+  ],
+  "metadata": {
+    "framework": "langchain",
+    "model": "claude-sonnet-4-5-20250929",
+    "environment": "production"
+  }
+}

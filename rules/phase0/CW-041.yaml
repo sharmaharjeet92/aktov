@@ -1,0 +1,33 @@
+rule_id: CW-041
+name: repeated_network_failures
+description: >
+  Detects 3+ network tool calls with error outcomes in a single trace.
+  May indicate port scanning, endpoint probing, or network reconnaissance.
+severity: medium
+category: temporal_anomaly
+layer: 1
+phase: 0
+requires_baseline: false
+safe_mode_compatible: true
+
+match:
+  count:
+    field: actions[*]
+    conditions:
+      - field: tool_category
+        equals: "network"
+      - field: outcome.status
+        equals: "error"
+    min_count: 3
+  logic: ALL
+
+response:
+  alert: true
+  recommended_action: >
+    Review the network targets. Check if the agent is scanning for
+    open endpoints or if there's a legitimate connectivity issue.
+
+tags:
+  - temporal_anomaly
+  - network_scanning
+  - reconnaissance

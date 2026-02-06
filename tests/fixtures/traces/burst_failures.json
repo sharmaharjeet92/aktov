@@ -1,0 +1,81 @@
+{
+  "agent_id": "test-scanner",
+  "agent_type": "data_pipeline",
+  "task_id": "task_evil_003",
+  "declared_intent": "Process data",
+  "mode": "safe",
+  "actions": [
+    {
+      "sequence_index": 0,
+      "tool_name": "http_get",
+      "tool_category": "network",
+      "semantic_flags": {
+        "http_method": "GET",
+        "is_external": true,
+        "argument_size_bucket": "small"
+      },
+      "outcome": {
+        "status": "error",
+        "error_class": "timeout",
+        "response_size_bucket": "small"
+      },
+      "timestamp": "2025-06-15T10:30:00Z",
+      "latency_ms": 5000
+    },
+    {
+      "sequence_index": 1,
+      "tool_name": "http_get",
+      "tool_category": "network",
+      "semantic_flags": {
+        "http_method": "GET",
+        "is_external": true,
+        "argument_size_bucket": "small"
+      },
+      "outcome": {
+        "status": "error",
+        "error_class": "timeout",
+        "response_size_bucket": "small"
+      },
+      "timestamp": "2025-06-15T10:30:06Z",
+      "latency_ms": 5000
+    },
+    {
+      "sequence_index": 2,
+      "tool_name": "http_get",
+      "tool_category": "network",
+      "semantic_flags": {
+        "http_method": "GET",
+        "is_external": true,
+        "argument_size_bucket": "small"
+      },
+      "outcome": {
+        "status": "error",
+        "error_class": "timeout",
+        "response_size_bucket": "small"
+      },
+      "timestamp": "2025-06-15T10:30:12Z",
+      "latency_ms": 5000
+    },
+    {
+      "sequence_index": 3,
+      "tool_name": "http_get",
+      "tool_category": "network",
+      "semantic_flags": {
+        "http_method": "GET",
+        "is_external": true,
+        "argument_size_bucket": "small"
+      },
+      "outcome": {
+        "status": "error",
+        "error_class": "not_found",
+        "response_size_bucket": "small"
+      },
+      "timestamp": "2025-06-15T10:30:13Z",
+      "latency_ms": 200
+    }
+  ],
+  "metadata": {
+    "framework": "custom",
+    "environment": "production"
+  }
+}
