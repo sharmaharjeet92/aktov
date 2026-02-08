@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import json
 import time
-from typing import Any, Optional
+from typing import Any
 from uuid import UUID
 
 from aktov.client import Aktov, Trace
@@ -69,10 +69,10 @@ class AktovCallbackHandler(BaseCallbackHandler):
         input_str: str,
         *,
         run_id: UUID,
-        parent_run_id: Optional[UUID] = None,
-        tags: Optional[list[str]] = None,
-        metadata: Optional[dict[str, Any]] = None,
-        inputs: Optional[dict[str, Any]] = None,
+        parent_run_id: UUID | None = None,
+        tags: list[str] | None = None,
+        metadata: dict[str, Any] | None = None,
+        inputs: dict[str, Any] | None = None,
         **kwargs: Any,
     ) -> None:
         """Record the start of a tool invocation."""
@@ -101,7 +101,7 @@ class AktovCallbackHandler(BaseCallbackHandler):
         output: str,
         *,
         run_id: UUID,
-        parent_run_id: Optional[UUID] = None,
+        parent_run_id: UUID | None = None,
         **kwargs: Any,
     ) -> None:
         """Record the end of a tool invocation."""
@@ -125,7 +125,7 @@ class AktovCallbackHandler(BaseCallbackHandler):
         error: BaseException,
         *,
         run_id: UUID,
-        parent_run_id: Optional[UUID] = None,
+        parent_run_id: UUID | None = None,
         **kwargs: Any,
     ) -> None:
         """Record a failed tool invocation."""
@@ -157,7 +157,7 @@ class AktovCallbackHandler(BaseCallbackHandler):
         return self._trace.end()
 
 
-def AktovCallback(
+def AktovCallback(  # noqa: N802
     aktov_agent_name: str,
     *,
     api_key: str | None = None,

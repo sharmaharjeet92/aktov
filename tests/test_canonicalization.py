@@ -1,6 +1,5 @@
 """Tests for aktov.canonicalization — tool category mapping."""
 
-import pytest
 
 from aktov.canonicalization import (
     DEFAULT_TOOL_CATEGORY_MAP,

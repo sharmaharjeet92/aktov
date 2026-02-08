@@ -13,9 +13,7 @@ from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
 import pytest
-
 from aktov.client import Aktov
-
 
 # ---------------------------------------------------------------------------
 # LangChain integration tests
@@ -26,7 +24,7 @@ class TestLangChainIntegration:
 
     def test_callback_factory_no_api_key(self) -> None:
         """AktovCallback works without api_key (local-only)."""
-        from aktov.integrations.langchain import AktovCallbackHandler, AktovCallback
+        from aktov.integrations.langchain import AktovCallback, AktovCallbackHandler
 
         cb = AktovCallback(aktov_agent_name="test-agent")
         assert isinstance(cb, AktovCallbackHandler)
@@ -104,7 +102,7 @@ class TestLangChainIntegration:
 
     def test_backward_compat_callback_alias(self) -> None:
         """The old `callback` name still works."""
-        from aktov.integrations.langchain import callback, AktovCallback
+        from aktov.integrations.langchain import AktovCallback, callback
         assert callback is AktovCallback
 
     def test_unmatched_tool_end_ignored(self) -> None:
@@ -125,7 +123,7 @@ class TestMCPIntegration:
 
     def test_wrap_factory_no_api_key(self) -> None:
         """wrap() works without api_key."""
-        from aktov.integrations.mcp import wrap, MCPTracingWrapper
+        from aktov.integrations.mcp import MCPTracingWrapper, wrap
 
         mock_client = MagicMock()
         traced = wrap(mock_client, aktov_agent_name="test-agent")
@@ -343,7 +341,7 @@ class TestOpenAITracer:
             }]
         }
 
-        with tracer.trace() as t:
+        with tracer.trace():
             actions = tracer.record_tool_calls(response)
 
         assert len(actions) == 1
@@ -356,7 +354,7 @@ class TestOpenAITracer:
         ak = Aktov(agent_id="test", agent_type="openai")
         tracer = OpenAITracer(ak)
 
-        with tracer.trace() as t:
+        with tracer.trace():
             pass
 
         assert tracer._active_trace is None
@@ -387,7 +385,7 @@ class TestAnthropicTracer:
             ]
         }
 
-        with tracer.trace() as t:
+        with tracer.trace():
             actions = tracer.record_tool_uses(response)
 
         assert len(actions) == 1
@@ -400,7 +398,7 @@ class TestAnthropicTracer:
         ak = Aktov(agent_id="test", agent_type="anthropic")
         tracer = AnthropicTracer(ak)
 
-        with tracer.trace() as t:
+        with tracer.trace():
             pass
 
         assert tracer._active_trace is None
@@ -428,8 +426,12 @@ class TestCLIInit:
 
                 settings = json.loads(settings_file.read_text())
                 hooks = settings["hooks"]["PostToolUse"]
+                # v0.3.1 format: {matcher, hooks: [{type, command, ...}]}
                 assert any(
-                    h.get("command") == "python -m aktov.hooks.claude_code"
+                    any(
+                        inner.get("command") == "python -m aktov.hooks.claude_code"
+                        for inner in h.get("hooks", [])
+                    )
                     for h in hooks
                 )
             finally:
@@ -448,9 +450,13 @@ class TestCLIInit:
 
                 settings = json.loads((Path(".claude") / "settings.json").read_text())
                 hooks = settings["hooks"]["PostToolUse"]
+                # v0.3.1 format: {matcher, hooks: [{type, command, ...}]}
                 aktov_hooks = [
                     h for h in hooks
-                    if h.get("command") == "python -m aktov.hooks.claude_code"
+                    if any(
+                        inner.get("command") == "python -m aktov.hooks.claude_code"
+                        for inner in h.get("hooks", [])
+                    )
                 ]
                 assert len(aktov_hooks) == 1
             finally:

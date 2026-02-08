@@ -158,7 +158,9 @@ class TestCapabilityEscalationViaSDK:
         rule_ids = {a.rule_id for a in alerts}
 
         assert "AK-001" in rule_ids, "AK-001 (read-only agent write op) should fire"
-        assert "AK-023" in rule_ids, "AK-023 (first action is execute, no preceding read) should fire"
+        assert "AK-023" in rule_ids, (
+            "AK-023 (first action is execute, no preceding read) should fire"
+        )
         assert "AK-030" in rule_ids, "AK-030 (DDL from non-DB agent) should fire"
         assert len(alerts) == 3
 

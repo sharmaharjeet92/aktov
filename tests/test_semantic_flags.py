@@ -1,7 +1,7 @@
 """Tests for aktov.semantic_flags — client-side flag extraction."""
 
-import pytest
 
+from aktov.schema import SemanticFlags
 from aktov.semantic_flags import (
     _compute_argument_size_bucket,
     _detect_http_method,
@@ -234,6 +234,3 @@ class TestExtractSemanticFlags:
         assert flags.has_network_calls is True
         assert flags.path_traversal_detected is True
 
-
-# Import for type reference in test_none_arguments
-from aktov.schema import SemanticFlags

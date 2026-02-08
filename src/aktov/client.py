@@ -20,19 +20,18 @@ Usage::
 
 from __future__ import annotations
 
-import atexit
 import asyncio
+import atexit
 import hashlib
 import logging
 import queue
 import threading
 import uuid
-from datetime import datetime, timezone
-from typing import Any, Optional
+from dataclasses import asdict
+from datetime import UTC, datetime
+from typing import Any
 
 import httpx
-
-from dataclasses import asdict
 
 from aktov.canonicalization import infer_tool_category
 from aktov.rules.engine import RuleEngine
@@ -212,7 +211,7 @@ class Trace:
                 tool_name=tool_name,
                 tool_category=tool_category or "execute",
                 semantic_flags=SemanticFlags(),
-                timestamp=datetime.now(timezone.utc),
+                timestamp=datetime.now(UTC),
             )
 
         # Auto-infer category
@@ -245,7 +244,7 @@ class Trace:
             semantic_flags=flags,
             arguments=arguments if self._client._mode == "debug" else None,
             outcome=outcome_model,
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             latency_ms=latency_ms,
         )
 
