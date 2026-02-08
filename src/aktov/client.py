@@ -299,6 +299,25 @@ class Trace:
             suppressed_dicts = []
 
         alert_dicts = [asdict(a) for a in alerts]
+
+        # Alert notifications (file log + callback)
+        if alert_dicts:
+            if self._client._alert_log:
+                from aktov.alerting import log_alerts
+
+                log_alerts(
+                    alert_dicts,
+                    agent_id=payload.agent_id,
+                    agent_type=payload.agent_type,
+                    session_id=self._session_id,
+                )
+            if self._client._on_alert:
+                for alert in alert_dicts:
+                    try:
+                        self._client._on_alert(alert)
+                    except Exception:
+                        logger.warning("on_alert callback failed", exc_info=True)
+
         return alert_dicts, suppressed_dicts, len(engine._rules)
 
     def end(self) -> TraceResponse:
@@ -490,6 +509,12 @@ class Aktov:
         Path to a YAML exclusion config file.  When provided, alerts
         matching exclusion rules are suppressed and reported separately
         in ``TraceResponse.suppressed_alerts``.
+    on_alert:
+        Optional callback invoked for each non-suppressed alert dict.
+        Exceptions are caught and logged (never crashes the trace).
+    alert_log:
+        If True (default), alerts are appended to ``~/.aktov/alerts.jsonl``
+        automatically.  Set to False to disable file logging.
     """
 
     def __init__(
@@ -511,6 +536,8 @@ class Aktov:
         flush_interval_ms: int = 5000,
         rules_dir: str | None = None,
         exclusions_file: str | None = None,
+        on_alert: Any = None,
+        alert_log: bool = True,
     ) -> None:
         if mode not in ("safe", "debug"):
             raise ValueError(f"mode must be 'safe' or 'debug', got {mode!r}")
@@ -528,6 +555,8 @@ class Aktov:
         self._framework = framework
         self._rules_dir = rules_dir
         self._exclusions_file = exclusions_file
+        self._on_alert = on_alert
+        self._alert_log = alert_log
 
         # Lazy-loaded rule engine (initialized on first trace.end())
         self._rule_engine: RuleEngine | None = None
