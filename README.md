@@ -70,6 +70,8 @@ response = trace.end()
 
 No API key needed. Works immediately after `pip install aktov`.
 
+**Want to see it in action first?** Try the [Detection Lab](https://github.com/sharmaharjeet92/aktov-labs) — 5 demos that show real attack detection in 30 seconds.
+
 ## Setup
 
 Use `aktov init` to get framework-specific instructions:
