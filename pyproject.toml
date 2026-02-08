@@ -1,11 +1,11 @@
 [project]
 name = "aktov"
-version = "0.3.1"
+version = "0.3.2"
 description = "Detection engineering for AI agents. Alerts when agents do weird or risky things."
 readme = "README.md"
 license = {file = "LICENSE"}
 requires-python = ">=3.12"
-keywords = ["ai", "agents", "security", "detection", "observability", "langchain", "openai", "mcp"]
+keywords = ["ai", "agents", "security", "detection", "observability", "langchain", "openai", "mcp", "openclaw"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
@@ -27,6 +27,7 @@ langchain = ["langchain-core>=0.3"]
 openai = ["openai>=1.0"]
 anthropic = ["anthropic>=0.40"]
 agents = ["openai-agents>=0.1"]
+openclaw = ["watchdog>=4.0"]
 dev = [
     "pytest>=8.0",
     "pytest-asyncio>=0.24",
