@@ -326,7 +326,7 @@ class TestLocalEvaluation:
         trace.record_action(tool_name="read_file", arguments={"path": "/tmp/safe"})
         response = trace.end()
         assert response.status == "evaluated"
-        assert response.rules_evaluated == 3  # bundled samples
+        assert response.rules_evaluated == 4  # bundled samples
 
     def test_local_eval_exfiltration_alerts(self) -> None:
         """Exfiltration pattern (read + external network) triggers AK-010."""
@@ -376,7 +376,7 @@ class TestLocalEvaluation:
         trace.record_action(tool_name="read_file", arguments={"path": "/tmp/safe.txt"})
         response = trace.end()
         assert response.alerts == []
-        assert response.rules_evaluated == 3
+        assert response.rules_evaluated == 4
 
     def test_local_eval_with_api_key_cloud_down(self) -> None:
         """When api_key is set but cloud is down, local alerts still returned."""
@@ -416,7 +416,7 @@ class TestLocalEvaluation:
         trace = ak.start_trace()
         trace.record_action(tool_name="read_file")
         response = trace.end()
-        assert response.rules_evaluated == 3  # same 3 sample rules
+        assert response.rules_evaluated == 4  # same 3 sample rules
 
     def test_alert_dict_structure(self) -> None:
         """Alert dicts have expected keys."""

@@ -120,4 +120,5 @@ class TraceResponse(BaseModel):
     status: Literal["sent", "dropped", "failed", "queued", "evaluated"] = "sent"
     rules_evaluated: int = 0
     alerts: list[dict[str, Any]] = Field(default_factory=list)
+    suppressed_alerts: list[dict[str, Any]] = Field(default_factory=list)
     error_code: str | None = None

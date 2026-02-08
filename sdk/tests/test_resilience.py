@@ -30,7 +30,7 @@ class TestCloudDown:
         assert response.trace_id is None
         assert response.status == "evaluated"  # local succeeded, cloud failed
         assert response.error_code is not None  # cloud error recorded
-        assert response.rules_evaluated == 3  # bundled sample rules
+        assert response.rules_evaluated == 4  # bundled sample rules
 
     def test_end_raises_when_configured(self) -> None:
         """trace.end() raises when raise_on_error=True."""
@@ -86,7 +86,7 @@ class TestBackgroundSender:
 
         assert response.status == "queued"
         assert response.trace_id is None
-        assert response.rules_evaluated == 3  # local rules evaluated
+        assert response.rules_evaluated == 4  # local rules evaluated
         cw._bg_sender.shutdown()
 
     def test_background_drops_when_full(self) -> None:
