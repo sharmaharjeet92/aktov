@@ -33,6 +33,6 @@ htmlcov/
 .DS_Store
 Thumbs.db
 
-# ChainWatch lab output & traces
+# Aktov lab output & traces
 labs/output/
 .claude/traces/

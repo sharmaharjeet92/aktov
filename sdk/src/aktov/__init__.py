@@ -9,7 +9,7 @@ Quick start::
     from aktov import Aktov
 
     ak = Aktov(api_key="ak_...", agent_id="my-agent", agent_type="langchain")
-    trace = cw.start_trace(declared_intent="answer user question")
+    trace = ak.start_trace(declared_intent="answer user question")
     trace.record_action(tool_name="read_file", arguments={"path": "/data/report.csv"})
     response = trace.end()
 """
