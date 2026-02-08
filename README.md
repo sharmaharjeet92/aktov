@@ -21,6 +21,17 @@ aktov init claude-code
 # Run `aktov report` to review after a session.
 ```
 
+### OpenClaw
+
+```bash
+pip install aktov
+aktov init openclaw
+aktov watch
+# Done. Real-time security monitoring for OpenClaw sessions.
+# Alerts appear as your agent uses tools.
+# Run `aktov report` to review after a session.
+```
+
 ### OpenAI Agent SDK
 
 ```python
@@ -78,6 +89,7 @@ Use `aktov init` to get framework-specific instructions:
 
 ```bash
 aktov init claude-code      # writes hook config automatically
+aktov init openclaw         # installs skill + use `aktov watch` for real-time
 aktov init openai-agents    # prints code to add
 aktov init langchain        # prints code to add
 aktov init mcp              # prints code to add
