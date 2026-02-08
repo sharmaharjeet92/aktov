@@ -249,7 +249,7 @@ def _parse_session_log(
     actions: list[dict[str, Any]] = []
 
     try:
-        with open(session_file, "r", encoding="utf-8") as f:
+        with open(session_file, encoding="utf-8") as f:
             f.seek(offset)
             raw = f.read()
             new_offset = f.tell()
@@ -539,7 +539,10 @@ def watch(
                     watched_dirs.add(dir_str)
 
         observer.start()
-        print(f"[aktov] Watching {len(watched_dirs)} session dir(s). Ctrl+C to stop.", file=sys.stderr)
+        print(
+            f"[aktov] Watching {len(watched_dirs)} session dir(s). Ctrl+C to stop.",
+            file=sys.stderr,
+        )
 
         try:
             while _running:
@@ -583,7 +586,10 @@ def watch(
                     )
 
     print(file=sys.stderr)
-    print(f"[aktov] Stopped. {total_tool_calls} tool calls monitored, {total_alerts} alerts.", file=sys.stderr)
+    print(
+        f"[aktov] Stopped. {total_tool_calls} tool calls monitored, {total_alerts} alerts.",
+        file=sys.stderr,
+    )
 
 
 # ---------------------------------------------------------------------------
