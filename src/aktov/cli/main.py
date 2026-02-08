@@ -318,6 +318,7 @@ def cmd_watch(args: argparse.Namespace) -> None:
     agent_name = os.environ.get("AK_AGENT_NAME", "openclaw")
     rules_dir = os.environ.get("AK_RULES_DIR")
     api_key = os.environ.get("AK_API_KEY")
+    exclusions = args.exclusions or os.environ.get("AK_EXCLUSIONS_FILE")
 
     watch(
         openclaw_dir=openclaw_dir,
@@ -325,6 +326,7 @@ def cmd_watch(args: argparse.Namespace) -> None:
         agent_name=agent_name,
         rules_dir=rules_dir,
         api_key=api_key,
+        exclusions_file=exclusions,
     )
 
 
@@ -722,6 +724,11 @@ def main(argv: list[str] | None = None) -> None:
         "--openclaw-dir",
         default=None,
         help="Path to OpenClaw home directory (default: ~/.openclaw)",
+    )
+    watch_parser.add_argument(
+        "--exclusions",
+        default=None,
+        help="Path to YAML exclusion config file",
     )
     watch_parser.add_argument(
         "--install",
