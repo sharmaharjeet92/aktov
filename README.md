@@ -1,5 +1,9 @@
 # aktov
 
+[![PyPI version](https://img.shields.io/pypi/v/aktov.svg)](https://pypi.org/project/aktov/)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](https://github.com/sharmaharjeet92/aktov/blob/main/LICENSE)
+[![Python 3.12+](https://img.shields.io/badge/python-3.12+-green.svg)](https://pypi.org/project/aktov/)
+
 **Detection engineering for AI agents.**
 
 `pip install aktov` + 2 lines of code — alerts when agents do weird or risky things.
