@@ -1,12 +1,9 @@
 """Tests for ``aktov rules`` CLI commands."""
 
-import tempfile
 from pathlib import Path
 
 import pytest
-
 from aktov.cli.main import main
-
 
 # ---------------------------------------------------------------------------
 # aktov rules schema

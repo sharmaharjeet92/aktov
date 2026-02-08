@@ -3,7 +3,6 @@
 import time
 
 import pytest
-
 from aktov.client import Aktov
 from aktov.schema import TraceResponse
 

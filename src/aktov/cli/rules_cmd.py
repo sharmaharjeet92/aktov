@@ -40,7 +40,7 @@ def cmd_rules_validate(args: argparse.Namespace) -> None:
     filepath = args.file
 
     try:
-        with open(filepath, "r", encoding="utf-8") as f:
+        with open(filepath, encoding="utf-8") as f:
             docs = list(yaml.safe_load_all(f))
     except FileNotFoundError:
         print(f"\n  ERROR: File not found: {filepath}\n", file=sys.stderr)

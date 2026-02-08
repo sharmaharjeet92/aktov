@@ -1,13 +1,12 @@
 """Tests for aktov.schema — Pydantic models for canonical traces."""
 
-import pytest
-from datetime import datetime, timezone
+from datetime import datetime
 
+import pytest
 from aktov.schema import (
     Action,
     ActionOutcome,
     SemanticFlags,
-    TeamContext,
     TracePayload,
     TraceResponse,
 )

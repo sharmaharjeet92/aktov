@@ -69,7 +69,7 @@ class RuleEngine:
             if not filename.endswith((".yaml", ".yml")):
                 continue
             filepath = os.path.join(rules_dir, filename)
-            with open(filepath, "r", encoding="utf-8") as f:
+            with open(filepath, encoding="utf-8") as f:
                 docs = list(yaml.safe_load_all(f))
 
             for doc in docs:

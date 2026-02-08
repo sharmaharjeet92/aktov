@@ -17,12 +17,12 @@ from __future__ import annotations
 import time
 from typing import Any
 
-from aktov.client import Aktov, Trace
+from aktov.client import Aktov
 from aktov.schema import TraceResponse
 
 # Conditional import — openai-agents may not be installed.
 try:
-    from agents import RunHooks, RunContextWrapper, Agent, Tool
+    from agents import Agent, RunContextWrapper, RunHooks, Tool
 
     _HAS_AGENTS = True
 except ImportError:
