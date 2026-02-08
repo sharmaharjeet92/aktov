@@ -14,6 +14,7 @@ Supports the full Phase 0 YAML rule schema:
 from __future__ import annotations
 
 import importlib.resources
+import logging
 import os
 from dataclasses import dataclass, field
 from typing import Any
@@ -21,6 +22,8 @@ from typing import Any
 import yaml
 
 from aktov.schema import Action, TracePayload
+
+logger = logging.getLogger("aktov")
 
 
 @dataclass
@@ -89,10 +92,22 @@ class RuleEngine:
             return self.load_rules(str(samples_dir))
 
     def load_rule_from_dict(self, data: dict[str, Any]) -> YAMLRule:
-        """Load a single rule from a dict (useful for testing)."""
+        """Load a single rule from a dict (useful for testing).
+
+        Performs strict validation — raises ``ValueError`` on errors.
+        """
+        from aktov.rules.validator import validate_rule
+
+        validation_errors = [
+            e for e in validate_rule(data) if e.severity == "error"
+        ]
+        if validation_errors:
+            msgs = "; ".join(f"{e.path}: {e.message}" for e in validation_errors)
+            raise ValueError(f"Invalid rule definition: {msgs}")
+
         rule = self._parse_rule(data)
         if rule is None:
-            raise ValueError("Invalid rule definition")
+            raise ValueError("Invalid rule definition — missing rule_id or name")
         self._rules.append(rule)
         return rule
 
@@ -115,6 +130,19 @@ class RuleEngine:
         name = data.get("name")
         if not rule_id or not name:
             return None
+
+        # Non-blocking validation: log warnings but never crash
+        try:
+            from aktov.rules.validator import validate_rule
+
+            for err in validate_rule(data):
+                if err.severity == "error":
+                    hint = f" ({err.suggestion})" if err.suggestion else ""
+                    logger.warning(
+                        "Rule %s: %s — %s%s", rule_id, err.path, err.message, hint
+                    )
+        except Exception:
+            pass
 
         return YAMLRule(
             id=rule_id,

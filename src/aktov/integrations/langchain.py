@@ -5,10 +5,11 @@ standard callback mechanism.
 
 Usage::
 
-    from aktov.integrations.langchain import callback
+    from aktov.integrations.langchain import AktovCallback
 
-    handler = callback(api_key="cw-...", agent_id="my-agent", agent_type="langchain")
-    agent.run("do something", callbacks=[handler])
+    cb = AktovCallback(aktov_agent_name="my-agent")
+    agent.invoke("do something", config={"callbacks": [cb]})
+    response = cb.end()  # → TraceResponse with alerts
 """
 
 from __future__ import annotations
@@ -19,6 +20,7 @@ from typing import Any, Optional
 from uuid import UUID
 
 from aktov.client import Aktov, Trace
+from aktov.schema import TraceResponse
 
 # Conditional import — LangChain may not be installed.
 try:
@@ -142,21 +144,34 @@ class AktovCallbackHandler(BaseCallbackHandler):
             latency_ms=latency_ms,
         )
 
+    # ------------------------------------------------------------------
+    # End trace
+    # ------------------------------------------------------------------
 
-def callback(
-    api_key: str,
-    agent_id: str,
+    def end(self) -> TraceResponse:
+        """Finish the trace and return alerts.
+
+        Call this after the agent run is complete to evaluate
+        all recorded tool calls against detection rules.
+        """
+        return self._trace.end()
+
+
+def AktovCallback(
+    aktov_agent_name: str,
+    *,
+    api_key: str | None = None,
     agent_type: str = "langchain",
     **kwargs: Any,
 ) -> AktovCallbackHandler:
-    """Factory function that creates a ready-to-use callback handler.
+    """Create a ready-to-use LangChain callback handler with Aktov tracing.
 
     Parameters
     ----------
+    aktov_agent_name:
+        Name for the agent being traced (required).
     api_key:
-        Aktov API key.
-    agent_id:
-        Identifier for the agent being traced.
+        Aktov API key. Optional — omit for local-only evaluation.
     agent_type:
         Agent framework type (default ``"langchain"``).
     **kwargs:
@@ -165,8 +180,13 @@ def callback(
     Returns
     -------
     AktovCallbackHandler
-        A callback handler with an active trace.
+        A callback handler that auto-records tool calls and evaluates
+        detection rules on ``end()``.
     """
-    client = Aktov(api_key=api_key, agent_id=agent_id, agent_type=agent_type, **kwargs)
-    trace = client.start_trace(agent_id=agent_id, agent_type=agent_type)
+    client = Aktov(api_key=api_key, agent_id=aktov_agent_name, agent_type=agent_type, **kwargs)
+    trace = client.start_trace(agent_id=aktov_agent_name, agent_type=agent_type)
     return AktovCallbackHandler(client=client, trace=trace)
+
+
+# Backward compat alias
+callback = AktovCallback
