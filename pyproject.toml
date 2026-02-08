@@ -36,9 +36,9 @@ dev = [
 aktov = "aktov.cli.main:main"
 
 [project.urls]
-Homepage = "https://aktov.dev"
+Homepage = "https://aktov.io"
 Repository = "https://github.com/sharmaharjeet92/aktov"
-Documentation = "https://docs.aktov.dev"
+Documentation = "https://aktov.io/docs"
 Issues = "https://github.com/sharmaharjeet92/aktov/issues"
 Changelog = "https://github.com/sharmaharjeet92/aktov/blob/main/CHANGELOG.md"
 
