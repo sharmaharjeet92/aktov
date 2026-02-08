@@ -26,10 +26,10 @@ aktov init claude-code
 ```bash
 pip install aktov
 aktov init openclaw
-aktov watch
-# Done. Real-time security monitoring for OpenClaw sessions.
-# Alerts appear as your agent uses tools.
-# Run `aktov report` to review after a session.
+aktov watch --install   # auto-start on login (macOS/Linux)
+# Done. Real-time security monitoring runs in the background.
+# Alerts logged to ~/.aktov/logs/watch.log
+# Run `aktov watch --status` to check, `aktov watch --uninstall` to remove.
 ```
 
 ### OpenAI Agent SDK
