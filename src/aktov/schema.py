@@ -125,7 +125,7 @@ class TraceResponse(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     trace_id: Optional[str] = None
-    status: Literal["sent", "dropped", "failed", "queued"] = "sent"
+    status: Literal["sent", "dropped", "failed", "queued", "evaluated"] = "sent"
     rules_evaluated: int = 0
     alerts: list[dict[str, Any]] = Field(default_factory=list)
     error_code: Optional[str] = None

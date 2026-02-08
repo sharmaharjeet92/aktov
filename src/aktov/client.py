@@ -4,8 +4,8 @@ Usage::
 
     from aktov import Aktov
 
-    ak = Aktov(api_key="ak_...", agent_id="my-agent", agent_type="langchain")
-    trace = cw.start_trace(declared_intent="answer user question")
+    ak = Aktov(agent_id="my-agent", agent_type="langchain")
+    trace = ak.start_trace(declared_intent="answer user question")
 
     trace.record_action(
         tool_name="execute_sql",
@@ -15,7 +15,7 @@ Usage::
     )
 
     response = trace.end()
-    print(response.trace_id)
+    print(response.alerts)  # local rule evaluation results
 """
 
 from __future__ import annotations
@@ -32,7 +32,10 @@ from typing import Any, Optional
 
 import httpx
 
+from dataclasses import asdict
+
 from aktov.canonicalization import infer_tool_category
+from aktov.rules.engine import RuleEngine
 from aktov.schema import (
     Action,
     ActionOutcome,
@@ -112,7 +115,7 @@ class _BackgroundSender:
         headers = {
             "Authorization": f"Bearer {self._api_key}",
             "Content-Type": "application/json",
-            "User-Agent": "aktov-python/0.1.0",
+            "User-Agent": "aktov-python/0.2.0",
         }
 
         while not self._stop.is_set():
@@ -275,26 +278,48 @@ class Trace:
             agent_fingerprint=fingerprint,
         )
 
+    def _evaluate_locally(self, payload: TracePayload) -> tuple[list[dict], int]:
+        """Evaluate the payload against local rules.
+
+        Returns (alert_dicts, rules_evaluated_count).
+        """
+        engine = self._client._get_rule_engine()
+        alerts = engine.evaluate(payload)
+        alert_dicts = [asdict(a) for a in alerts]
+        return alert_dicts, len(engine._rules)
+
     def end(self) -> TraceResponse:
-        """Finish the trace and submit it to the Aktov cloud API.
+        """Finish the trace, evaluate local rules, and optionally submit to cloud.
 
-        Returns the API response containing the trace ID and any alerts.
-        By default (raise_on_error=False), never raises — returns a stub
-        response on failure so the agent is never blocked.
+        Always evaluates bundled (or custom) rules locally and returns
+        alerts immediately.  When an ``api_key`` is configured, the trace
+        is also sent to the Aktov cloud API as a best-effort side effect.
 
-        When ``background=True`` on the client, enqueues the payload and
-        returns immediately with ``status="queued"``.
+        Returns a :class:`TraceResponse` with local alerts populated.
         """
         payload = self._build_payload()
 
-        # Background mode: enqueue and return immediately
+        # Local rule evaluation (always runs)
+        alert_dicts, rules_count = self._evaluate_locally(payload)
+
+        # Background mode: evaluate locally, enqueue for cloud, return immediately
         if self._client._bg_sender is not None:
             accepted = self._client._bg_sender.enqueue(payload)
             return TraceResponse(
                 status="queued" if accepted else "dropped",
+                rules_evaluated=rules_count,
+                alerts=alert_dicts,
             )
 
-        # Synchronous mode
+        # No cloud submission if no API key — local only
+        if self._client._api_key is None:
+            return TraceResponse(
+                status="evaluated",
+                rules_evaluated=rules_count,
+                alerts=alert_dicts,
+            )
+
+        # Cloud submission (best-effort, fire-and-forget)
         try:
             try:
                 loop = asyncio.get_running_loop()
@@ -305,15 +330,25 @@ class Trace:
                 import concurrent.futures
                 with concurrent.futures.ThreadPoolExecutor() as pool:
                     future = pool.submit(asyncio.run, self._submit_async(payload))
-                    return future.result()
+                    cloud_resp = future.result()
             else:
-                return asyncio.run(self._submit_async(payload))
+                cloud_resp = asyncio.run(self._submit_async(payload))
+
+            # Merge: cloud trace_id + local alerts
+            return TraceResponse(
+                trace_id=cloud_resp.trace_id,
+                status="sent",
+                rules_evaluated=rules_count,
+                alerts=alert_dicts,
+            )
         except Exception as exc:
             if self._client._raise_on_error:
                 raise
-            logger.warning("Aktov trace.end() failed (fire-and-forget): %s", exc)
+            logger.warning("Aktov cloud submit failed (local alerts still returned): %s", exc)
             return TraceResponse(
-                status="failed",
+                status="evaluated",
+                rules_evaluated=rules_count,
+                alerts=alert_dicts,
                 error_code=type(exc).__name__,
             )
 
@@ -321,21 +356,43 @@ class Trace:
         """Async version of :py:meth:`end`."""
         payload = self._build_payload()
 
-        # Background mode: enqueue and return immediately
+        # Local rule evaluation (always runs)
+        alert_dicts, rules_count = self._evaluate_locally(payload)
+
+        # Background mode: evaluate locally, enqueue for cloud, return immediately
         if self._client._bg_sender is not None:
             accepted = self._client._bg_sender.enqueue(payload)
             return TraceResponse(
                 status="queued" if accepted else "dropped",
+                rules_evaluated=rules_count,
+                alerts=alert_dicts,
             )
 
+        # No cloud submission if no API key — local only
+        if self._client._api_key is None:
+            return TraceResponse(
+                status="evaluated",
+                rules_evaluated=rules_count,
+                alerts=alert_dicts,
+            )
+
+        # Cloud submission (best-effort)
         try:
-            return await self._submit_async(payload)
+            cloud_resp = await self._submit_async(payload)
+            return TraceResponse(
+                trace_id=cloud_resp.trace_id,
+                status="sent",
+                rules_evaluated=rules_count,
+                alerts=alert_dicts,
+            )
         except Exception as exc:
             if self._client._raise_on_error:
                 raise
-            logger.warning("Aktov trace.end_async() failed: %s", exc)
+            logger.warning("Aktov cloud submit failed (local alerts still returned): %s", exc)
             return TraceResponse(
-                status="failed",
+                status="evaluated",
+                rules_evaluated=rules_count,
+                alerts=alert_dicts,
                 error_code=type(exc).__name__,
             )
 
@@ -345,7 +402,7 @@ class Trace:
         headers = {
             "Authorization": f"Bearer {self._client._api_key}",
             "Content-Type": "application/json",
-            "User-Agent": "aktov-python/0.1.0",
+            "User-Agent": "aktov-python/0.2.0",
         }
 
         timeout = self._client._timeout_ms / 1000.0
@@ -376,7 +433,8 @@ class Aktov:
     Parameters
     ----------
     api_key:
-        API key for the Aktov cloud service.
+        API key for the Aktov cloud service.  Optional — when omitted,
+        traces are evaluated locally against bundled rules only.
     mode:
         ``"safe"`` (default) strips raw arguments; ``"debug"`` keeps them.
     base_url:
@@ -404,11 +462,14 @@ class Aktov:
         Max depth of the background sender queue (default 1000).
     flush_interval_ms:
         Max wait before the background worker flushes (default 5000ms).
+    rules_dir:
+        Path to a directory of YAML rule files.  When omitted, the bundled
+        sample rules are loaded automatically.
     """
 
     def __init__(
         self,
-        api_key: str,
+        api_key: str | None = None,
         *,
         mode: str = "safe",
         include_fields: list[str] | None = None,
@@ -423,6 +484,7 @@ class Aktov:
         background: bool = False,
         queue_size: int = 1000,
         flush_interval_ms: int = 5000,
+        rules_dir: str | None = None,
     ) -> None:
         if mode not in ("safe", "debug"):
             raise ValueError(f"mode must be 'safe' or 'debug', got {mode!r}")
@@ -438,10 +500,14 @@ class Aktov:
         self._max_actions = max_actions
         self._raise_on_error = raise_on_error
         self._framework = framework
+        self._rules_dir = rules_dir
 
-        # Background sender
+        # Lazy-loaded rule engine (initialized on first trace.end())
+        self._rule_engine: RuleEngine | None = None
+
+        # Background sender (only when api_key is provided)
         self._bg_sender: _BackgroundSender | None = None
-        if background:
+        if background and api_key:
             self._bg_sender = _BackgroundSender(
                 base_url=self._base_url,
                 api_key=self._api_key,
@@ -449,6 +515,16 @@ class Aktov:
                 queue_size=queue_size,
                 flush_interval_ms=flush_interval_ms,
             )
+
+    def _get_rule_engine(self) -> RuleEngine:
+        """Return the rule engine, lazily loading rules on first call."""
+        if self._rule_engine is None:
+            self._rule_engine = RuleEngine()
+            if self._rules_dir:
+                self._rule_engine.load_rules(self._rules_dir)
+            else:
+                self._rule_engine.load_bundled_rules()
+        return self._rule_engine
 
     @property
     def stats(self) -> dict[str, int | str | None]:

