@@ -3,7 +3,7 @@ name = "aktov"
 version = "0.1.0"
 description = "Detection engineering for AI agents. Alerts when agents do weird or risky things."
 readme = "README.md"
-license = {text = "Apache-2.0"}
+license = {file = "LICENSE"}
 requires-python = ">=3.12"
 keywords = ["ai", "agents", "security", "detection", "observability", "langchain", "openai", "mcp"]
 classifiers = [
@@ -37,8 +37,10 @@ aktov = "aktov.cli.main:main"
 
 [project.urls]
 Homepage = "https://aktov.dev"
-Repository = "https://gitlab.com/aktov/aktov"
+Repository = "https://github.com/sharmaharjeet92/aktov"
 Documentation = "https://docs.aktov.dev"
+Issues = "https://github.com/sharmaharjeet92/aktov/issues"
+Changelog = "https://github.com/sharmaharjeet92/aktov/blob/main/CHANGELOG.md"
 
 [build-system]
 requires = ["hatchling"]
