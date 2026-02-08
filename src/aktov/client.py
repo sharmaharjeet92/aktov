@@ -35,6 +35,7 @@ import httpx
 
 from aktov.canonicalization import infer_tool_category
 from aktov.rules.engine import RuleEngine
+from aktov.rules.exclusions import ExclusionConfig, apply_exclusions, load_exclusions
 from aktov.schema import (
     Action,
     ActionOutcome,
@@ -277,15 +278,28 @@ class Trace:
             agent_fingerprint=fingerprint,
         )
 
-    def _evaluate_locally(self, payload: TracePayload) -> tuple[list[dict], int]:
-        """Evaluate the payload against local rules.
+    def _evaluate_locally(
+        self, payload: TracePayload,
+    ) -> tuple[list[dict], list[dict], int]:
+        """Evaluate the payload against local rules and apply exclusions.
 
-        Returns (alert_dicts, rules_evaluated_count).
+        Returns (alert_dicts, suppressed_dicts, rules_evaluated_count).
         """
         engine = self._client._get_rule_engine()
         alerts = engine.evaluate(payload)
+
+        # Apply exclusion filter
+        exclusion_config = self._client._get_exclusion_config()
+        if exclusion_config is not None:
+            alerts, suppressed = apply_exclusions(
+                alerts, exclusion_config, payload.agent_id, payload.actions,
+            )
+            suppressed_dicts = [asdict(s) for s in suppressed]
+        else:
+            suppressed_dicts = []
+
         alert_dicts = [asdict(a) for a in alerts]
-        return alert_dicts, len(engine._rules)
+        return alert_dicts, suppressed_dicts, len(engine._rules)
 
     def end(self) -> TraceResponse:
         """Finish the trace, evaluate local rules, and optionally submit to cloud.
@@ -299,7 +313,7 @@ class Trace:
         payload = self._build_payload()
 
         # Local rule evaluation (always runs)
-        alert_dicts, rules_count = self._evaluate_locally(payload)
+        alert_dicts, suppressed_dicts, rules_count = self._evaluate_locally(payload)
 
         # Background mode: evaluate locally, enqueue for cloud, return immediately
         if self._client._bg_sender is not None:
@@ -308,6 +322,7 @@ class Trace:
                 status="queued" if accepted else "dropped",
                 rules_evaluated=rules_count,
                 alerts=alert_dicts,
+                suppressed_alerts=suppressed_dicts,
             )
 
         # No cloud submission if no API key — local only
@@ -316,6 +331,7 @@ class Trace:
                 status="evaluated",
                 rules_evaluated=rules_count,
                 alerts=alert_dicts,
+                suppressed_alerts=suppressed_dicts,
             )
 
         # Cloud submission (best-effort, fire-and-forget)
@@ -339,6 +355,7 @@ class Trace:
                 status="sent",
                 rules_evaluated=rules_count,
                 alerts=alert_dicts,
+                suppressed_alerts=suppressed_dicts,
             )
         except Exception as exc:
             if self._client._raise_on_error:
@@ -348,6 +365,7 @@ class Trace:
                 status="evaluated",
                 rules_evaluated=rules_count,
                 alerts=alert_dicts,
+                suppressed_alerts=suppressed_dicts,
                 error_code=type(exc).__name__,
             )
 
@@ -356,7 +374,7 @@ class Trace:
         payload = self._build_payload()
 
         # Local rule evaluation (always runs)
-        alert_dicts, rules_count = self._evaluate_locally(payload)
+        alert_dicts, suppressed_dicts, rules_count = self._evaluate_locally(payload)
 
         # Background mode: evaluate locally, enqueue for cloud, return immediately
         if self._client._bg_sender is not None:
@@ -365,6 +383,7 @@ class Trace:
                 status="queued" if accepted else "dropped",
                 rules_evaluated=rules_count,
                 alerts=alert_dicts,
+                suppressed_alerts=suppressed_dicts,
             )
 
         # No cloud submission if no API key — local only
@@ -373,6 +392,7 @@ class Trace:
                 status="evaluated",
                 rules_evaluated=rules_count,
                 alerts=alert_dicts,
+                suppressed_alerts=suppressed_dicts,
             )
 
         # Cloud submission (best-effort)
@@ -383,6 +403,7 @@ class Trace:
                 status="sent",
                 rules_evaluated=rules_count,
                 alerts=alert_dicts,
+                suppressed_alerts=suppressed_dicts,
             )
         except Exception as exc:
             if self._client._raise_on_error:
@@ -392,6 +413,7 @@ class Trace:
                 status="evaluated",
                 rules_evaluated=rules_count,
                 alerts=alert_dicts,
+                suppressed_alerts=suppressed_dicts,
                 error_code=type(exc).__name__,
             )
 
@@ -464,6 +486,10 @@ class Aktov:
     rules_dir:
         Path to a directory of YAML rule files.  When omitted, the bundled
         sample rules are loaded automatically.
+    exclusions_file:
+        Path to a YAML exclusion config file.  When provided, alerts
+        matching exclusion rules are suppressed and reported separately
+        in ``TraceResponse.suppressed_alerts``.
     """
 
     def __init__(
@@ -484,6 +510,7 @@ class Aktov:
         queue_size: int = 1000,
         flush_interval_ms: int = 5000,
         rules_dir: str | None = None,
+        exclusions_file: str | None = None,
     ) -> None:
         if mode not in ("safe", "debug"):
             raise ValueError(f"mode must be 'safe' or 'debug', got {mode!r}")
@@ -500,9 +527,13 @@ class Aktov:
         self._raise_on_error = raise_on_error
         self._framework = framework
         self._rules_dir = rules_dir
+        self._exclusions_file = exclusions_file
 
         # Lazy-loaded rule engine (initialized on first trace.end())
         self._rule_engine: RuleEngine | None = None
+
+        # Lazy-loaded exclusion config
+        self._exclusion_config: ExclusionConfig | None = None
 
         # Background sender (only when api_key is provided)
         self._bg_sender: _BackgroundSender | None = None
@@ -524,6 +555,14 @@ class Aktov:
             else:
                 self._rule_engine.load_bundled_rules()
         return self._rule_engine
+
+    def _get_exclusion_config(self) -> ExclusionConfig | None:
+        """Return the exclusion config, lazily loading on first call."""
+        if self._exclusions_file is None:
+            return None
+        if self._exclusion_config is None:
+            self._exclusion_config = load_exclusions(self._exclusions_file)
+        return self._exclusion_config
 
     @property
     def stats(self) -> dict[str, int | str | None]:

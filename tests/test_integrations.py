@@ -97,7 +97,7 @@ class TestLangChainIntegration:
 
         response = cb.end()
         assert response.status == "evaluated"
-        assert response.rules_evaluated == 3
+        assert response.rules_evaluated == 4
         rule_ids = {a["rule_id"] for a in response.alerts}
         assert "AK-032" in rule_ids
 
@@ -279,7 +279,7 @@ class TestOpenAIAgentSDKIntegration:
 
         response = hooks.end()
         assert response.status == "evaluated"
-        assert response.rules_evaluated == 3
+        assert response.rules_evaluated == 4
         rule_ids = {a["rule_id"] for a in response.alerts}
         assert "AK-032" in rule_ids
 
