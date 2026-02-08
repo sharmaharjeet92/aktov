@@ -3,6 +3,7 @@
 Commands::
 
     aktov init <framework>     — set up Aktov for your framework
+    aktov alerts               — view, tail, or clear the alert log
     aktov scan trace.json      — evaluate traces against detection rules
     aktov report               — show alerts from latest session trace
     aktov watch                — real-time monitoring of OpenClaw sessions
@@ -517,6 +518,167 @@ def _load_traces(filepath: Path) -> list[dict]:
 
 
 # ---------------------------------------------------------------------------
+# alerts command
+# ---------------------------------------------------------------------------
+
+SEVERITY_SYMBOLS = {
+    "critical": "!!!",
+    "high": "!! ",
+    "medium": "!  ",
+    "low": ".  ",
+}
+
+
+def _parse_duration(value: str) -> float:
+    """Parse a human duration string like '2h', '30m', '1d' into seconds."""
+    import re
+
+    m = re.fullmatch(r"(\d+)\s*([smhd])", value.strip())
+    if not m:
+        raise argparse.ArgumentTypeError(
+            f"Invalid duration: {value!r}. Use e.g. '2h', '30m', '1d'."
+        )
+    amount = int(m.group(1))
+    unit = m.group(2)
+    multipliers = {"s": 1, "m": 60, "h": 3600, "d": 86400}
+    return amount * multipliers[unit]
+
+
+def cmd_alerts(args: argparse.Namespace) -> None:
+    """Show, tail, or clear the alert log."""
+    from datetime import UTC, datetime, timedelta
+
+    from aktov.alerting import ALERT_LOG, clear_alerts, read_alerts
+
+    # --clear
+    if args.clear:
+        clear_alerts()
+        print("\n  Alert log cleared.\n")
+        return
+
+    # Compute 'since' filter
+    since = None
+    if args.since:
+        seconds = _parse_duration(args.since)
+        since = datetime.now(UTC) - timedelta(seconds=seconds)
+    elif not args.tail:
+        # Default: last 24 hours
+        since = datetime.now(UTC) - timedelta(hours=24)
+
+    min_severity = args.severity if args.severity else None
+
+    # --tail mode
+    if args.tail:
+        _tail_alerts(min_severity=min_severity, json_output=args.json)
+        return
+
+    # Normal mode: read and display
+    alerts = read_alerts(since=since, min_severity=min_severity)
+
+    if not alerts:
+        print("\n  No alerts found.\n")
+        if not ALERT_LOG.exists():
+            print("  Alert log does not exist yet.")
+            print("  Alerts are logged automatically when rules fire during trace.end().\n")
+        return
+
+    if args.json:
+        for alert in alerts:
+            print(json.dumps(alert, default=str))
+        return
+
+    # Table output
+    print(f"\n  {len(alerts)} alert(s)\n")
+    headers = ["Time", "Severity", "Rule", "Agent", "Description"]
+    rows: list[list[str]] = []
+    for alert in alerts:
+        ts = alert.get("timestamp", "")
+        if isinstance(ts, str) and len(ts) > 19:
+            ts = ts[:19]  # Trim to YYYY-MM-DDTHH:MM:SS
+        severity = alert.get("severity", "?")
+        symbol = SEVERITY_SYMBOLS.get(severity, "?  ")
+        rows.append([
+            ts,
+            f"{symbol} {severity.upper()}",
+            alert.get("rule_id", "???"),
+            alert.get("agent_id", "?"),
+            alert.get("rule_name", "unknown"),
+        ])
+
+    _print_table(headers, rows)
+    print()
+
+
+def _tail_alerts(
+    *,
+    min_severity: str | None = None,
+    json_output: bool = False,
+) -> None:
+    """Live-tail the alert log file."""
+    import time
+
+    from aktov.alerting import ALERT_LOG, SEVERITY_ORDER
+
+    min_level = SEVERITY_ORDER.get(min_severity, 0) if min_severity else 0
+
+    print("\n  Watching for alerts... (Ctrl+C to stop)\n")
+
+    # Start from end of file
+    pos = 0
+    if ALERT_LOG.exists():
+        pos = ALERT_LOG.stat().st_size
+
+    try:
+        while True:
+            if not ALERT_LOG.exists():
+                time.sleep(1)
+                continue
+
+            size = ALERT_LOG.stat().st_size
+            if size < pos:
+                pos = 0  # File was truncated
+
+            if size > pos:
+                with open(ALERT_LOG, encoding="utf-8") as f:
+                    f.seek(pos)
+                    new_data = f.read()
+                    pos = f.tell()
+
+                for line in new_data.splitlines():
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        entry = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
+
+                    # Severity filter
+                    if min_severity:
+                        severity = entry.get("severity", "low")
+                        if SEVERITY_ORDER.get(severity, 0) < min_level:
+                            continue
+
+                    if json_output:
+                        print(json.dumps(entry, default=str), flush=True)
+                    else:
+                        severity = entry.get("severity", "?")
+                        symbol = SEVERITY_SYMBOLS.get(severity, "?  ")
+                        rule_id = entry.get("rule_id", "???")
+                        rule_name = entry.get("rule_name", "unknown")
+                        agent = entry.get("agent_id", "?")
+                        print(
+                            f"  {symbol} [{rule_id}] {severity.upper()}: "
+                            f"{rule_name} (agent={agent})",
+                            flush=True,
+                        )
+
+            time.sleep(1)
+    except KeyboardInterrupt:
+        print("\n  Stopped.\n")
+
+
+# ---------------------------------------------------------------------------
 # Main entry point
 # ---------------------------------------------------------------------------
 
@@ -575,6 +737,38 @@ def main(argv: list[str] | None = None) -> None:
         "--status",
         action="store_true",
         help="Check if background service is running",
+    )
+
+    # alerts subcommand
+    alerts_parser = subparsers.add_parser(
+        "alerts",
+        help="View, tail, or clear the alert log",
+    )
+    alerts_parser.add_argument(
+        "--tail",
+        action="store_true",
+        help="Live-tail the alert log (Ctrl+C to stop)",
+    )
+    alerts_parser.add_argument(
+        "--since",
+        default=None,
+        help="Show alerts from the last N units (e.g. '2h', '30m', '1d')",
+    )
+    alerts_parser.add_argument(
+        "--severity",
+        choices=["low", "medium", "high", "critical"],
+        default=None,
+        help="Minimum severity level to show",
+    )
+    alerts_parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Output alerts as raw JSON lines",
+    )
+    alerts_parser.add_argument(
+        "--clear",
+        action="store_true",
+        help="Clear the alert log",
     )
 
     # scan subcommand
@@ -652,6 +846,8 @@ def main(argv: list[str] | None = None) -> None:
 
     if parsed.command == "init":
         cmd_init(parsed)
+    elif parsed.command == "alerts":
+        cmd_alerts(parsed)
     elif parsed.command == "report":
         cmd_report(parsed)
     elif parsed.command == "watch":
