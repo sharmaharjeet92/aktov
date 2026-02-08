@@ -14,11 +14,15 @@ Usage::
 
 from __future__ import annotations
 
+import json
+import logging
 import time
 from typing import Any
 
 from aktov.client import Aktov
 from aktov.schema import TraceResponse
+
+logger = logging.getLogger("aktov")
 
 # Conditional import — openai-agents may not be installed.
 try:
@@ -43,6 +47,10 @@ class AktovRunHooks(RunHooks):
 
     Pass an instance to ``Runner.run(hooks=...)`` to automatically
     trace all tool invocations.
+
+    Tool arguments are captured by wrapping each tool's ``on_invoke_tool``
+    method on first use.  This happens transparently — no changes to
+    user code are required.
     """
 
     def __init__(
@@ -70,6 +78,39 @@ class AktovRunHooks(RunHooks):
             agent_type=agent_type,
         )
         self._pending_starts: dict[str, float] = {}
+        self._pending_args: dict[str, dict[str, Any] | None] = {}
+        self._wrapped_tools: set[int] = set()  # track by id() to avoid re-wrapping
+
+    def _wrap_tool(self, tool: Any) -> None:
+        """Wrap a tool's on_invoke_tool to capture arguments.
+
+        The OpenAI Agents SDK does not pass tool arguments to RunHooks
+        callbacks.  This method intercepts on_invoke_tool to capture
+        the JSON arguments before the tool executes, making them
+        available for semantic flag extraction.
+        """
+        tool_id = id(tool)
+        if tool_id in self._wrapped_tools:
+            return
+        if not hasattr(tool, "on_invoke_tool"):
+            return
+
+        original = tool.on_invoke_tool
+        hooks_self = self
+        tool_name = getattr(tool, "name", None) or str(tool)
+
+        async def _wrapped_invoke(ctx: Any, args_json: str) -> Any:
+            try:
+                args = json.loads(args_json) if args_json else {}
+                if not isinstance(args, dict):
+                    args = {"value": args}
+            except (json.JSONDecodeError, TypeError):
+                args = None
+            hooks_self._pending_args[tool_name] = args
+            return await original(ctx, args_json)
+
+        tool.on_invoke_tool = _wrapped_invoke
+        self._wrapped_tools.add(tool_id)
 
     async def on_tool_start(
         self,
@@ -80,6 +121,11 @@ class AktovRunHooks(RunHooks):
         """Called when a tool is about to be invoked."""
         tool_name = getattr(tool, "name", None) or str(tool)
         self._pending_starts[tool_name] = time.monotonic()
+
+        # Wrap on_invoke_tool to capture arguments (one-time per tool instance).
+        # This fires before on_invoke_tool is called, so the wrapper is in
+        # place when the runner invokes the tool.
+        self._wrap_tool(tool)
 
     async def on_tool_end(
         self,
@@ -93,10 +139,8 @@ class AktovRunHooks(RunHooks):
         start_time = self._pending_starts.pop(tool_name, None)
         latency_ms = (time.monotonic() - start_time) * 1000 if start_time else None
 
-        # Extract arguments if available
-        arguments: dict[str, Any] | None = None
-        if hasattr(tool, "arguments"):
-            arguments = tool.arguments if isinstance(tool.arguments, dict) else None
+        # Read arguments captured by the on_invoke_tool wrapper
+        arguments = self._pending_args.pop(tool_name, None)
 
         self._trace.record_action(
             tool_name=tool_name,
