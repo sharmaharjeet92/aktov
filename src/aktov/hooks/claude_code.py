@@ -77,20 +77,56 @@ def _load_session_actions(trace_file: Path) -> list[dict]:
     return actions
 
 
+# ---------------------------------------------------------------------------
+# Alert deduplication helpers
+# ---------------------------------------------------------------------------
+
+
+def _make_dedup_key(alert: dict) -> str:
+    """Build a dedup key from rule_id + sorted matched action indices."""
+    rule_id = alert.get("rule_id", "???")
+    matched = sorted(alert.get("matched_actions", []))
+    return f"{rule_id}:{matched}"
+
+
+def _load_alerted_keys(trace_file: Path) -> set[str]:
+    """Load the set of already-fired alert dedup keys."""
+    af = trace_file.with_suffix(".alerted.json")
+    if af.exists():
+        try:
+            return set(json.loads(af.read_text(encoding="utf-8")))
+        except (json.JSONDecodeError, TypeError):
+            return set()
+    return set()
+
+
+def _save_alerted_keys(trace_file: Path, keys: set[str]) -> None:
+    """Persist the updated set of dedup keys."""
+    af = trace_file.with_suffix(".alerted.json")
+    af.write_text(json.dumps(sorted(keys)), encoding="utf-8")
+
+
 def _evaluate_and_alert(
     agent_name: str,
     actions: list[dict],
     rules_dir: str | None = None,
     api_key: str | None = None,
+    *,
+    session_id: str | None = None,
+    trace_file: Path | None = None,
 ) -> None:
-    """Evaluate accumulated actions and print alerts to stderr."""
+    """Evaluate accumulated actions and print only NEW alerts to stderr."""
     ak = Aktov(
         api_key=api_key,
         agent_id=agent_name,
         agent_type="claude-code",
         rules_dir=rules_dir,
     )
-    trace = ak.start_trace(agent_id=agent_name, agent_type="claude-code")
+    trace = ak.start_trace(
+        agent_id=agent_name,
+        agent_type="claude-code",
+        session_id=session_id,
+    )
 
     for action in actions:
         trace.record_action(
@@ -100,7 +136,16 @@ def _evaluate_and_alert(
 
     response = trace.end()
 
+    # Dedup: only print/log alerts that haven't fired before in this session
+    already_alerted = _load_alerted_keys(trace_file) if trace_file else set()
+    new_keys: set[str] = set()
+
     for alert in response.alerts:
+        key = _make_dedup_key(alert)
+        if key in already_alerted:
+            continue
+
+        new_keys.add(key)
         severity = alert.get("severity", "medium")
         symbol = SEVERITY_SYMBOLS.get(severity, "?  ")
         rule_id = alert.get("rule_id", "???")
@@ -109,6 +154,9 @@ def _evaluate_and_alert(
             f"[aktov] {symbol} [{rule_id}] {severity.upper()}: {rule_name}",
             file=sys.stderr,
         )
+
+    if trace_file and new_keys:
+        _save_alerted_keys(trace_file, already_alerted | new_keys)
 
 
 def main() -> None:
@@ -143,7 +191,10 @@ def main() -> None:
 
     # Load all session actions and evaluate
     all_actions = _load_session_actions(trace_file)
-    _evaluate_and_alert(agent_name, all_actions, rules_dir, api_key)
+    _evaluate_and_alert(
+        agent_name, all_actions, rules_dir, api_key,
+        session_id=session_id, trace_file=trace_file,
+    )
 
 
 if __name__ == "__main__":
