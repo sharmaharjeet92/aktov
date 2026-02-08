@@ -21,7 +21,6 @@ from aktov.rules.engine import RuleEngine
 from aktov.schema import SemanticFlags, TracePayload
 from aktov.semantic_flags import extract_semantic_flags
 
-
 # ---------------------------------------------------------------------------
 # init command
 # ---------------------------------------------------------------------------
@@ -230,7 +229,7 @@ def cmd_report(args: argparse.Namespace) -> None:
 
 def _load_trace_file(path: str) -> dict[str, Any]:
     """Load and parse a JSON trace file."""
-    with open(path, "r", encoding="utf-8") as f:
+    with open(path, encoding="utf-8") as f:
         return json.load(f)
 
 

@@ -3,20 +3,17 @@
 import importlib.resources
 
 import yaml
-
 from aktov.rules.validator import (
-    validate_rule,
-    format_schema_output,
-    format_examples_output,
-    format_validation_results,
-    ValidationError,
-    TRACE_LEVEL_FIELDS,
     ACTION_FIELDS,
-    VALID_OPERATORS,
+    TRACE_LEVEL_FIELDS,
     VALID_MATCH_TYPES,
-    SEMANTIC_FLAG_NAMES,
+    VALID_OPERATORS,
+    ValidationError,
+    format_examples_output,
+    format_schema_output,
+    format_validation_results,
+    validate_rule,
 )
-
 
 # ---------------------------------------------------------------------------
 # Required top-level fields

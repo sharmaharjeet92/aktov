@@ -31,12 +31,10 @@ from __future__ import annotations
 import json
 import os
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from aktov.client import Aktov
-from aktov.schema import TracePayload
-
 
 # Session trace directory
 TRACES_DIR = Path.home() / ".aktov" / "traces"
@@ -52,7 +50,7 @@ SEVERITY_SYMBOLS = {
 def _get_session_id() -> str:
     """Derive a session ID from the parent process or date."""
     ppid = os.getppid()
-    today = datetime.now(timezone.utc).strftime("%Y%m%d")
+    today = datetime.now(UTC).strftime("%Y%m%d")
     return f"{today}-{ppid}"
 
 
@@ -125,7 +123,7 @@ def main() -> None:
         if not raw.strip():
             return
         payload = json.loads(raw)
-    except (json.JSONDecodeError, IOError):
+    except (OSError, json.JSONDecodeError):
         return
 
     # Extract tool call data from Claude Code's hook format
@@ -136,7 +134,7 @@ def main() -> None:
     action_data = {
         "tool_name": tool_name,
         "arguments": tool_input if isinstance(tool_input, dict) else None,
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
     }
 
     # Append to session trace

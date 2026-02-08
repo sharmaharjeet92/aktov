@@ -20,11 +20,11 @@ Example::
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, Callable, Optional
+from typing import Any
 
 from aktov.schema import Action, TracePayload
-
 
 # ---------------------------------------------------------------------------
 # ActionChain — fluent query API over a list of actions

@@ -18,8 +18,9 @@ Usage::
 
 from __future__ import annotations
 
+from collections.abc import Generator
 from contextlib import contextmanager
-from typing import Any, Generator, Optional
+from typing import Any
 
 from aktov.client import Aktov, Trace
 

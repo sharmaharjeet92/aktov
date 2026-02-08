@@ -9,9 +9,8 @@ Provides:
 from __future__ import annotations
 
 import difflib
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
-
 
 # ---------------------------------------------------------------------------
 # Schema registry — derived from aktov.schema Pydantic models

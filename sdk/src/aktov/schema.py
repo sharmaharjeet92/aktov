@@ -8,8 +8,8 @@ never included — only semantic flags travel over the wire.
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
-from typing import Any, Literal, Optional
+from datetime import UTC, datetime
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -19,19 +19,15 @@ class SemanticFlags(BaseModel):
 
     model_config = ConfigDict(populate_by_name=True)
 
-    sql_statement_type: Optional[Literal[
-        "SELECT", "INSERT", "UPDATE", "DELETE", "DDL", "OTHER"
-    ]] = None
-    http_method: Optional[Literal[
-        "GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"
-    ]] = None
-    is_external: Optional[bool] = None
-    sensitive_dir_match: Optional[bool] = None
-    has_network_calls: Optional[bool] = None
-    argument_size_bucket: Optional[Literal[
-        "small", "medium", "large", "very_large"
-    ]] = None
-    path_traversal_detected: Optional[bool] = None
+    sql_statement_type: (
+        Literal["SELECT", "INSERT", "UPDATE", "DELETE", "DDL", "OTHER"] | None
+    ) = None
+    http_method: Literal["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"] | None = None
+    is_external: bool | None = None
+    sensitive_dir_match: bool | None = None
+    has_network_calls: bool | None = None
+    argument_size_bucket: Literal["small", "medium", "large", "very_large"] | None = None
+    path_traversal_detected: bool | None = None
 
 
 class ActionOutcome(BaseModel):
@@ -40,17 +36,13 @@ class ActionOutcome(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     status: Literal["success", "failure", "error", "timeout"]
-    error_class: Optional[Literal[
-        "permission_denied",
-        "not_found",
-        "timeout",
-        "rate_limited",
-        "validation_error",
-        "internal_error",
-    ]] = None
-    response_size_bucket: Optional[Literal[
-        "small", "medium", "large", "very_large"
-    ]] = None
+    error_class: (
+        Literal[
+            "permission_denied", "not_found", "timeout",
+            "rate_limited", "validation_error", "internal_error",
+        ] | None
+    ) = None
+    response_size_bucket: Literal["small", "medium", "large", "very_large"] | None = None
 
 
 class Action(BaseModel):
@@ -64,10 +56,10 @@ class Action(BaseModel):
         "read", "write", "execute", "network", "credential", "pii", "delete"
     ]
     semantic_flags: SemanticFlags = Field(default_factory=SemanticFlags)
-    arguments: Optional[dict[str, Any]] = None  # Only populated in DEBUG mode
-    outcome: Optional[ActionOutcome] = None
-    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    latency_ms: Optional[float] = None
+    arguments: dict[str, Any] | None = None  # Only populated in DEBUG mode
+    outcome: ActionOutcome | None = None
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    latency_ms: float | None = None
 
 
 class TeamContext(BaseModel):
@@ -75,11 +67,11 @@ class TeamContext(BaseModel):
 
     model_config = ConfigDict(populate_by_name=True)
 
-    team_id: Optional[str] = None
-    team_role: Optional[str] = None
-    team_size: Optional[int] = None
-    shared_resource_id: Optional[str] = None
-    coordination_events: Optional[list[str]] = None
+    team_id: str | None = None
+    team_role: str | None = None
+    team_size: int | None = None
+    shared_resource_id: str | None = None
+    coordination_events: list[str] | None = None
 
 
 class TracePayload(BaseModel):
@@ -89,16 +81,16 @@ class TracePayload(BaseModel):
 
     agent_id: str
     agent_type: str
-    task_id: Optional[str] = None
-    session_id: Optional[str] = Field(
+    task_id: str | None = None
+    session_id: str | None = Field(
         default_factory=lambda: str(uuid.uuid4())
     )
-    declared_intent: Optional[str] = None
+    declared_intent: str | None = None
     mode: Literal["safe", "debug"] = "safe"
     actions: list[Action] = Field(default_factory=list)
-    metadata: Optional[dict[str, Any]] = None
-    team_context: Optional[TeamContext] = None
-    agent_fingerprint: Optional[str] = None
+    metadata: dict[str, Any] | None = None
+    team_context: TeamContext | None = None
+    agent_fingerprint: str | None = None
 
     @field_validator("actions")
     @classmethod
@@ -124,8 +116,8 @@ class TraceResponse(BaseModel):
 
     model_config = ConfigDict(populate_by_name=True)
 
-    trace_id: Optional[str] = None
+    trace_id: str | None = None
     status: Literal["sent", "dropped", "failed", "queued", "evaluated"] = "sent"
     rules_evaluated: int = 0
     alerts: list[dict[str, Any]] = Field(default_factory=list)
-    error_code: Optional[str] = None
+    error_code: str | None = None

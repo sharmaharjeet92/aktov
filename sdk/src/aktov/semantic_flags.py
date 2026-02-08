@@ -8,7 +8,7 @@ themselves.
 from __future__ import annotations
 
 import re
-from typing import Any, Optional
+from typing import Any
 
 from aktov.schema import SemanticFlags
 
@@ -27,7 +27,7 @@ _SQL_PATTERNS: list[tuple[str, str]] = [
 ]
 
 
-def _detect_sql_type(args: dict[str, Any]) -> Optional[str]:
+def _detect_sql_type(args: dict[str, Any]) -> str | None:
     """Return the SQL statement type if any SQL-like key is found."""
     for key in _SQL_KEYS:
         value = args.get(key)
@@ -49,7 +49,7 @@ _HTTP_METHOD_KEYS = {"method", "http_method", "request_method"}
 _VALID_HTTP_METHODS = {"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"}
 
 
-def _detect_http_method(args: dict[str, Any]) -> Optional[str]:
+def _detect_http_method(args: dict[str, Any]) -> str | None:
     """Return the HTTP method if present."""
     for key in _HTTP_METHOD_KEYS:
         value = args.get(key)
@@ -75,7 +75,7 @@ _INTERNAL_PATTERNS = [
 ]
 
 
-def _detect_is_external(args: dict[str, Any]) -> Optional[bool]:
+def _detect_is_external(args: dict[str, Any]) -> bool | None:
     """Return True if a URL/host looks external, False if internal, None if no URL."""
     for key in _URL_KEYS:
         value = args.get(key)
@@ -108,7 +108,7 @@ _SENSITIVE_PATTERNS = [
 ]
 
 
-def _detect_sensitive_dir(args: dict[str, Any]) -> Optional[bool]:
+def _detect_sensitive_dir(args: dict[str, Any]) -> bool | None:
     """Return True if any string value references a sensitive directory."""
     for value in args.values():
         if not isinstance(value, str):
@@ -126,7 +126,7 @@ def _detect_sensitive_dir(args: dict[str, Any]) -> Optional[bool]:
 _TRAVERSAL_PATTERN = re.compile(r"\.\./|\.\.\\")
 
 
-def _detect_path_traversal(args: dict[str, Any]) -> Optional[bool]:
+def _detect_path_traversal(args: dict[str, Any]) -> bool | None:
     """Return True if any string value contains path traversal sequences."""
     for value in args.values():
         if not isinstance(value, str):
@@ -147,7 +147,7 @@ _NETWORK_INDICATORS = [
 ]
 
 
-def _detect_network_calls(args: dict[str, Any]) -> Optional[bool]:
+def _detect_network_calls(args: dict[str, Any]) -> bool | None:
     """Return True if any value contains a URL-like pattern."""
     for value in args.values():
         if not isinstance(value, str):
