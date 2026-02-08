@@ -479,8 +479,14 @@ class TestOpenClawHook:
                 json.dumps({
                     "role": "assistant",
                     "content": [
-                        {"type": "tool_use", "id": "t1", "name": "read", "input": {"file_path": "/tmp/a.txt"}},
-                        {"type": "tool_use", "id": "t2", "name": "browser", "input": {"url": "https://example.com"}},
+                        {
+                            "type": "tool_use", "id": "t1",
+                            "name": "read", "input": {"file_path": "/tmp/a.txt"},
+                        },
+                        {
+                            "type": "tool_use", "id": "t2",
+                            "name": "browser", "input": {"url": "https://example.com"},
+                        },
                     ],
                 }),
             ]
@@ -512,7 +518,9 @@ class TestOpenClawHook:
             # Write first tool call
             line1 = json.dumps({
                 "role": "assistant",
-                "content": [{"type": "tool_use", "id": "t1", "name": "read", "input": {"file_path": "/a"}}],
+                "content": [
+                    {"type": "tool_use", "id": "t1", "name": "read", "input": {"file_path": "/a"}},
+                ],
             })
             session_file.write_text(line1 + "\n")
 
@@ -522,7 +530,9 @@ class TestOpenClawHook:
             # Append second tool call
             line2 = json.dumps({
                 "role": "assistant",
-                "content": [{"type": "tool_use", "id": "t2", "name": "write", "input": {"file_path": "/b"}}],
+                "content": [
+                    {"type": "tool_use", "id": "t2", "name": "write", "input": {"file_path": "/b"}},
+                ],
             })
             with open(session_file, "a") as f:
                 f.write(line2 + "\n")
@@ -593,9 +603,8 @@ class TestOpenClawHook:
 
     def test_save_to_aktov_traces(self) -> None:
         """Actions are saved to ~/.aktov/traces/ for aktov report."""
-        from aktov.hooks.openclaw import _save_to_aktov_traces
-
         import aktov.hooks.openclaw as oc_mod
+        from aktov.hooks.openclaw import _save_to_aktov_traces
         original_dir = oc_mod.TRACES_DIR
 
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -636,7 +645,9 @@ class TestOpenClawWatcher:
             # Append a tool call
             line = json.dumps({
                 "role": "assistant",
-                "content": [{"type": "tool_use", "id": "t1", "name": "exec", "input": {"command": "ls"}}],
+                "content": [
+                    {"type": "tool_use", "id": "t1", "name": "exec", "input": {"command": "ls"}},
+                ],
             })
             with open(session_file, "a") as f:
                 f.write(line + "\n")
