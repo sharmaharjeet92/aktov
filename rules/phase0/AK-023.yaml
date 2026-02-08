@@ -1,0 +1,28 @@
+rule_id: AK-023
+name: write_execute_network_with_no_preceding_read
+description: >
+  Detects traces where the first tool call is a write, execute, or network
+  operation with no preceding read phase. Normal agents typically read context
+  before acting — skipping the read phase is suspicious.
+severity: medium
+category: chain_anomaly
+layer: 1
+phase: 0
+requires_baseline: false
+safe_mode_compatible: true
+
+match:
+  conditions:
+    - field: actions[0].tool_category
+      in: ["write", "execute", "network"]
+  logic: ALL
+
+response:
+  alert: true
+  recommended_action: >
+    Review why this agent started with a destructive or outbound action.
+    Check if context was provided via prompt rather than tool reads.
+
+tags:
+  - chain_anomaly
+  - no_read_phase

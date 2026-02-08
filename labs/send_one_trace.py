@@ -1,4 +1,4 @@
-"""Send a single trace to the running ChainWatch cloud and display the response.
+"""Send a single trace to the running Aktov cloud and display the response.
 
 Posts the fixture JSON directly to the cloud API (preserving pre-computed
 semantic flags), proving the full chain: HTTP -> cloud -> YAML eval -> alert -> dedup.
@@ -22,7 +22,7 @@ import httpx
 
 DEFAULT_FIXTURE = Path(__file__).resolve().parent.parent / "tests" / "fixtures" / "traces" / "exfiltration_pattern.json"
 BASE_URL = "http://localhost:8000"
-API_KEY = "cw_dev_test_key_abc123"
+API_KEY = "ak_dev_test_key_abc123"
 
 SEVERITY_COLORS = {
     "critical": "\033[91m",
@@ -34,7 +34,7 @@ RESET = "\033[0m"
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Send a trace to ChainWatch cloud")
+    parser = argparse.ArgumentParser(description="Send a trace to Aktov cloud")
     parser.add_argument("--fixture", default=str(DEFAULT_FIXTURE), help="Path to JSON fixture")
     parser.add_argument("--base-url", default=BASE_URL, help="Cloud base URL")
     parser.add_argument("--api-key", default=API_KEY, help="API key")

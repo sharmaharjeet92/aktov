@@ -1,4 +1,4 @@
-"""Alembic async migration environment for ChainWatch Cloud."""
+"""Alembic async migration environment for Aktov Cloud."""
 
 import asyncio
 from logging.config import fileConfig
@@ -10,12 +10,12 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 from alembic import context
 
 # Import all models so Base.metadata is fully populated
-from chainwatch_cloud.models import Base  # noqa: F401
-from chainwatch_cloud.config import settings
+from aktov_cloud.models import Base  # noqa: F401
+from aktov_cloud.config import settings
 
 config = context.config
 
-# Set the database URL from application settings (CW_DATABASE_URL env var)
+# Set the database URL from application settings (AK_DATABASE_URL env var)
 config.set_main_option("sqlalchemy.url", settings.database_url)
 
 if config.config_file_name is not None:

@@ -1,14 +1,14 @@
 [project]
-name = "chainwatch-workspace"
+name = "aktov-workspace"
 version = "0.0.0"
-description = "Workspace root for ChainWatch monorepo"
+description = "Workspace root for Aktov monorepo"
 requires-python = ">=3.12"
 
 [tool.uv.workspace]
 members = ["sdk", "cloud"]
 
 [tool.uv.sources]
-chainwatch = { workspace = true }
+aktov = { workspace = true }
 
 [tool.pytest.ini_options]
 testpaths = ["sdk/tests", "cloud/tests", "tests"]

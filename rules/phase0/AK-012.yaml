@@ -1,0 +1,31 @@
+rule_id: AK-012
+name: large_payload_to_external_network
+description: >
+  Detects large payload transmission to an external network endpoint.
+  May indicate bulk data exfiltration.
+severity: high
+category: data_exfiltration
+layer: 1
+phase: 0
+requires_baseline: false
+safe_mode_compatible: true
+
+match:
+  conditions:
+    - field: actions[*].tool_category
+      contains_any: ["network"]
+    - field: actions[*].semantic_flags.is_external
+      equals: true
+    - field: actions[*].semantic_flags.argument_size_bucket
+      equals: "very_large"
+  logic: ALL
+
+response:
+  alert: true
+  recommended_action: >
+    Investigate what data was transmitted. Check if the external endpoint
+    is authorized for this agent. Review preceding read operations.
+
+tags:
+  - data_exfiltration
+  - large_payload

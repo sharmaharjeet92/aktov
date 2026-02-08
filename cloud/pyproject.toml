@@ -1,7 +1,7 @@
 [project]
-name = "chainwatch-cloud"
+name = "aktov-cloud"
 version = "0.1.0"
-description = "ChainWatch cloud service — trace ingestion, rule evaluation, and alert delivery."
+description = "Aktov cloud service — trace ingestion, rule evaluation, and alert delivery."
 requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.115",
@@ -12,7 +12,7 @@ dependencies = [
     "pydantic-settings>=2.0",
     "pyyaml>=6.0",
     "httpx>=0.27",
-    "chainwatch",
+    "aktov",
 ]
 
 [project.optional-dependencies]
@@ -30,4 +30,4 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/chainwatch_cloud"]
+packages = ["src/aktov_cloud"]

@@ -9,8 +9,8 @@ from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from chainwatch_cloud.models.agent import Agent
-from chainwatch_cloud.models.usage import UsageMeter
+from aktov_cloud.models.agent import Agent
+from aktov_cloud.models.usage import UsageMeter
 
 
 @pytest.mark.asyncio

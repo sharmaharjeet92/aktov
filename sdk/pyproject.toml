@@ -1,5 +1,5 @@
 [project]
-name = "chainwatch"
+name = "aktov"
 version = "0.1.0"
 description = "Detection engineering for AI agents. Alerts when agents do weird or risky things."
 readme = "README.md"
@@ -33,16 +33,16 @@ dev = [
 ]
 
 [project.scripts]
-chainwatch = "chainwatch.cli.main:main"
+aktov = "aktov.cli.main:main"
 
 [project.urls]
-Homepage = "https://chainwatch.dev"
-Repository = "https://gitlab.com/chainwatch/chainwatch"
-Documentation = "https://docs.chainwatch.dev"
+Homepage = "https://aktov.dev"
+Repository = "https://gitlab.com/aktov/aktov"
+Documentation = "https://docs.aktov.dev"
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/chainwatch"]
+packages = ["src/aktov"]

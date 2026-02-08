@@ -1,9 +1,9 @@
-"""Tests for chainwatch.schema — Pydantic models for canonical traces."""
+"""Tests for aktov.schema — Pydantic models for canonical traces."""
 
 import pytest
 from datetime import datetime, timezone
 
-from chainwatch.schema import (
+from aktov.schema import (
     Action,
     ActionOutcome,
     SemanticFlags,
@@ -188,7 +188,7 @@ class TestTraceResponse:
         resp = TraceResponse(
             trace_id="tr-456",
             rules_evaluated=5,
-            alerts=[{"rule_id": "CW-001", "severity": "high"}],
+            alerts=[{"rule_id": "AK-001", "severity": "high"}],
         )
         assert resp.rules_evaluated == 5
         assert len(resp.alerts) == 1

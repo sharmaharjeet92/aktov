@@ -2,15 +2,15 @@ services:
   postgres:
     image: postgres:16-alpine
     environment:
-      POSTGRES_DB: chainwatch
-      POSTGRES_USER: chainwatch
-      POSTGRES_PASSWORD: chainwatch_dev
+      POSTGRES_DB: aktov
+      POSTGRES_USER: aktov
+      POSTGRES_PASSWORD: aktov_dev
     ports:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U chainwatch"]
+      test: ["CMD-SHELL", "pg_isready -U aktov"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -22,9 +22,9 @@ services:
     ports:
       - "8000:8000"
     environment:
-      CW_DATABASE_URL: "postgresql+asyncpg://chainwatch:chainwatch_dev@postgres:5432/chainwatch"
-      CW_ENVIRONMENT: "dev"
-      CW_RULES_DIR: "/app/rules/phase0"
+      AK_DATABASE_URL: "postgresql+asyncpg://aktov:aktov_dev@postgres:5432/aktov"
+      AK_ENVIRONMENT: "dev"
+      AK_RULES_DIR: "/app/rules/phase0"
     depends_on:
       postgres:
         condition: service_healthy

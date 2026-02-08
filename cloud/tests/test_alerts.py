@@ -9,10 +9,10 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from chainwatch_cloud.models.agent import Agent
-from chainwatch_cloud.models.alert import Alert
-from chainwatch_cloud.models.detection_rule import DetectionRule
-from chainwatch_cloud.models.organization import Organization
+from aktov_cloud.models.agent import Agent
+from aktov_cloud.models.alert import Alert
+from aktov_cloud.models.detection_rule import DetectionRule
+from aktov_cloud.models.organization import Organization
 
 
 @pytest.mark.asyncio

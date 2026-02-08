@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**ChainWatch** — Detection engineering for AI agents. `pip install chainwatch` + 2 lines → alerts when agents do weird or risky things.
+**Aktov** — Detection engineering for AI agents. `pip install aktov` + 2 lines → alerts when agents do weird or risky things.
 
 **Vision:** Cloudflare for agentic detections — enterprise-grade security accessible to solo devs.
 
@@ -20,7 +20,7 @@ Phase 0 (ship first)          Phase 1 (users + data)        v1.5                
 FastAPI + Postgres             + Queue (Celery/Arq)          Agent teams             TypeScript SDK
 12 deterministic rules         + Bigram novelty (L2)         Enterprise privacy      Inline blocking
 Sync rule eval                 + Markov scoring (L3)         Trigram models          SIEM export
-Webhook alerts                 + Baselines + drift           CW-100 series           Self-hosted
+Webhook alerts                 + Baselines + drift           AK-100 series           Self-hosted
 API key auth                   + Dashboards + UI                                     SOC 2
 SAFE/DEBUG modes               + Stripe billing
 Preview CLI                    + Clerk/Auth0
@@ -37,14 +37,14 @@ No Celery, Redis, Timescale.   triggers it (see gates).      warrants it.       
 
 - **SAFE (default):** No raw args leave. SDK computes semantic flags client-side (sql_statement_type, http_method, is_external, etc.) and transmits only those + tool_name, tool_category, timing, outcome status. Detection: ~70-80%.
 - **DEBUG (opt-in):** Adds selective raw field transmission via allowlist. Detection: ~85-95%.
-- **Preview CLI:** `chainwatch preview --trace <file>` shows exactly what will be sent.
+- **Preview CLI:** `aktov preview --trace <file>` shows exactly what will be sent.
 
 ### Detection: Layered Funnel of Fidelity
 
 - **Layer 1 (Phase 0):** 12 deterministic rules on categorical fields + semantic flags. Baseline-free, SAFE-mode compatible.
 - **Layer 2 (Phase 1):** Bigram frequency novelty detection. Activates after 30 traces per agent_type.
 - **Layer 3 (Phase 1):** First-order Markov transition probability scoring. Activates after 100 traces.
-- **Layer 4 (v1.5):** Agent team correlation (CW-100 series).
+- **Layer 4 (v1.5):** Agent team correlation (AK-100 series).
 
 ### Phase 0 Tech Stack
 
@@ -59,7 +59,7 @@ No Celery, Redis, Timescale.   triggers it (see gates).      warrants it.       
 | Monitoring | Sentry | PostHog (Phase 1) |
 | Billing | Manual / free | Stripe (Phase 1) |
 
-### SDK: `chainwatch` (Open Source)
+### SDK: `aktov` (Open Source)
 
 - Framework auto-detection: LangChain, OpenAI, Anthropic, MCP (v1), CrewAI + AutoGen (v1.1)
 - Schema canonicalization: framework fields → `tool_name`, `tool_category`, `arguments`
@@ -77,9 +77,9 @@ These are final. Do not reopen.
 | N-gram order | Bigrams only in v1. Trigrams at 5K traces per agent_type. | Reduces scope, avoids sparsity |
 | Retention | 30 days fixed (non-enterprise). 7 days for free tier. | Simple default, configurable later |
 | Alert dedup | `(org_id, agent_id, rule_id)` suppressed 1 hour. Critical: only if identical evidence. | Prevents alert storms |
-| Mode validation | Server rejects SAFE traces containing raw `arguments` (422). `CW_DEV_MODE=1` env var for local dev. | Strict enforcement |
-| v1 SaaS rules | YAML + constrained expressions only for customers. Python DSL is ChainWatch-authored system rules only. | Eliminates RCE risk |
-| Phase 0 rules | 12 baseline-free, SAFE-mode compatible rules (CW-001, 007, 010, 012, 020, 022, 023, 030, 031, 032, 041, 050) | Ship fast, high signal |
+| Mode validation | Server rejects SAFE traces containing raw `arguments` (422). `AK_DEV_MODE=1` env var for local dev. | Strict enforcement |
+| v1 SaaS rules | YAML + constrained expressions only for customers. Python DSL is Aktov-authored system rules only. | Eliminates RCE risk |
+| Phase 0 rules | 12 baseline-free, SAFE-mode compatible rules (AK-001, 007, 010, 012, 020, 022, 023, 030, 031, 032, 041, 050) | Ship fast, high signal |
 
 ## Phase Gates
 
@@ -100,7 +100,7 @@ Do NOT add complexity until evidence triggers it.
 
 First-mover advantage is critical. Speed > polish.
 
-1. **OSS SDK + rule library on GitHub** — "Sigma for AI Agents", `pip install chainwatch`. This is the adoption flywheel.
+1. **OSS SDK + rule library on GitHub** — "Sigma for AI Agents", `pip install aktov`. This is the adoption flywheel.
 2. **DEF CON Singapore paper** — establishes threat model credibility.
 3. **Product Hunt / HN launch** — "2 lines of code. Detections in 5 minutes."
 4. **Free cloud tier** — 5K traces, 3 agents, 7-day retention. Deterministic rules only. Conversion funnel to Indie ($19/mo).
@@ -149,7 +149,7 @@ The full specification lives in `context.md`. Key sections:
 - **Data Model** — Full PostgreSQL schema (Phase 0 tables + Phase 1 statistical tables)
 - **API Design** — Trace ingestion, alerts, rules, baselines, example alert JSON + Slack notification
 - **SDK Design** — Framework support matrix, canonicalization table, integration examples
-- **Detection Rule Library** — Full CW rule catalog (Layer 1-4)
+- **Detection Rule Library** — Full AK rule catalog (Layer 1-4)
 - **Go-To-Market** — Launch sequence, positioning, target personas
 - **Key Technical Decisions** — 13 locked decisions with rationale
 

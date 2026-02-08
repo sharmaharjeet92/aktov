@@ -1,4 +1,4 @@
-"""Replay saved traces through the ChainWatch YAML rule engine.
+"""Replay saved traces through the Aktov YAML rule engine.
 
 Takes JSON trace files (from the lab or Claude Code hooks) and evaluates
 all Phase 0 rules against them, printing any alerts.
@@ -18,8 +18,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "sdk" / "src"))
 
-from chainwatch.rules.engine import RuleEngine
-from chainwatch.schema import TracePayload
+from aktov.rules.engine import RuleEngine
+from aktov.schema import TracePayload
 
 RULES_DIR = Path(__file__).resolve().parent.parent / "rules" / "phase0"
 
@@ -58,7 +58,7 @@ def load_traces(filepath: Path) -> list[dict]:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Replay traces through ChainWatch rules")
+    parser = argparse.ArgumentParser(description="Replay traces through Aktov rules")
     parser.add_argument("files", nargs="+", help="JSON/JSONL trace files to evaluate")
     parser.add_argument(
         "--rules-dir",

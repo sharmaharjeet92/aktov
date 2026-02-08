@@ -1,4 +1,4 @@
-"""Shared test fixtures for ChainWatch Cloud tests.
+"""Shared test fixtures for Aktov Cloud tests.
 
 Uses SQLite + aiosqlite for a fast, self-contained test database.
 """
@@ -18,17 +18,17 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 # Point the YAML engine to the actual rule files during tests
 _RULES_DIR = str(Path(__file__).resolve().parents[2] / "rules" / "phase0")
-os.environ["CW_RULES_DIR"] = _RULES_DIR
+os.environ["AK_RULES_DIR"] = _RULES_DIR
 
-from chainwatch_cloud.config import settings
-from chainwatch_cloud.models.agent import Agent
-from chainwatch_cloud.models.api_key import ApiKey
-from chainwatch_cloud.models.base import Base
-from chainwatch_cloud.models.detection_rule import DetectionRule
-from chainwatch_cloud.models.organization import Organization
+from aktov_cloud.config import settings
+from aktov_cloud.models.agent import Agent
+from aktov_cloud.models.api_key import ApiKey
+from aktov_cloud.models.base import Base
+from aktov_cloud.models.detection_rule import DetectionRule
+from aktov_cloud.models.organization import Organization
 
 # Import all models so Base.metadata has them
-import chainwatch_cloud.models  # noqa: F401
+import aktov_cloud.models  # noqa: F401
 
 
 # ---------------------------------------------------------------------------
@@ -79,7 +79,7 @@ async def test_org(db_session: AsyncSession) -> Organization:
 @pytest_asyncio.fixture
 async def test_api_key(db_session: AsyncSession, test_org: Organization) -> str:
     """Create a test API key and return the raw key string."""
-    raw_key = "cw_test_key_abc123"
+    raw_key = "ak_test_key_abc123"
     key_hash = ApiKey.hash_key(raw_key, settings.api_key_salt)
     api_key = ApiKey(
         id=uuid.uuid4(),
@@ -116,18 +116,18 @@ async def test_rules(db_session: AsyncSession) -> list[DetectionRule]:
     """Seed the Phase 0 system rules and return them."""
     # Severity/category must match YAML rules exactly (source of truth)
     rule_defs = [
-        ("CW-001", "Read-only agent write operation", "high", "capability_escalation"),
-        ("CW-007", "Credential tool from non-credential agent", "critical", "capability_escalation"),
-        ("CW-010", "Sequential read -> network egress", "critical", "data_exfiltration"),
-        ("CW-012", "Large payload to external network", "high", "data_exfiltration"),
-        ("CW-020", "Extreme chain length", "medium", "chain_anomaly"),
-        ("CW-022", "Burst of failed tool calls", "medium", "chain_anomaly"),
-        ("CW-023", "Write/execute/network with no preceding read", "medium", "chain_anomaly"),
-        ("CW-030", "SQL DDL from non-DB agent", "critical", "argument_anomaly"),
-        ("CW-031", "Sensitive directory access", "high", "argument_anomaly"),
-        ("CW-032", "Path traversal detected", "critical", "argument_anomaly"),
-        ("CW-041", "Repeated network failures", "medium", "temporal_anomaly"),
-        ("CW-050", "Multiple external domains", "high", "data_exfiltration"),
+        ("AK-001", "Read-only agent write operation", "high", "capability_escalation"),
+        ("AK-007", "Credential tool from non-credential agent", "critical", "capability_escalation"),
+        ("AK-010", "Sequential read -> network egress", "critical", "data_exfiltration"),
+        ("AK-012", "Large payload to external network", "high", "data_exfiltration"),
+        ("AK-020", "Extreme chain length", "medium", "chain_anomaly"),
+        ("AK-022", "Burst of failed tool calls", "medium", "chain_anomaly"),
+        ("AK-023", "Write/execute/network with no preceding read", "medium", "chain_anomaly"),
+        ("AK-030", "SQL DDL from non-DB agent", "critical", "argument_anomaly"),
+        ("AK-031", "Sensitive directory access", "high", "argument_anomaly"),
+        ("AK-032", "Path traversal detected", "critical", "argument_anomaly"),
+        ("AK-041", "Repeated network failures", "medium", "temporal_anomaly"),
+        ("AK-050", "Multiple external domains", "high", "data_exfiltration"),
     ]
     rules = []
     for rule_id, name, severity, category in rule_defs:
@@ -160,8 +160,8 @@ async def client(
     test_rules: list[DetectionRule],
 ) -> AsyncClient:
     """Create an httpx AsyncClient wired to the FastAPI app with test DB overrides."""
-    from chainwatch_cloud.database import get_db
-    from chainwatch_cloud.main import app
+    from aktov_cloud.database import get_db
+    from aktov_cloud.main import app
 
     async def _override_get_db():
         yield db_session

@@ -1,8 +1,8 @@
-# ChainWatch — Project Context
+# Aktov — Project Context
 
 ## One-Line Summary
 
-Detection engineering for AI agents. `pip install chainwatch` + 2 lines → alerts when agents do weird or risky things. SAFE mode by default: no raw tool arguments leave your machine. Open-source rules ("Sigma for agents"), cloud adds baselines + anomaly scoring + dashboards.
+Detection engineering for AI agents. `pip install aktov` + 2 lines → alerts when agents do weird or risky things. SAFE mode by default: no raw tool arguments leave your machine. Open-source rules ("Sigma for agents"), cloud adds baselines + anomaly scoring + dashboards.
 
 **Vision:** Cloudflare for agentic detections — enterprise-grade security accessible to solo devs.
 
@@ -14,7 +14,7 @@ AI agents (LangChain, CrewAI, AutoGen, OpenAI Assistants, Anthropic tool-use, MC
 
 No existing product purpose-builds **detection engineering** for agent action traces. LLM observability tools (LangSmith, Arize) track prompt quality and latency. SIEMs ingest generic logs but lack semantic understanding of agent behavior. The gap is a purpose-built detection layer that understands what agents _should_ do versus what they _are_ doing.
 
-### Specific Threat Scenarios ChainWatch Detects
+### Specific Threat Scenarios Aktov Detects
 
 1. **Prompt Injection → Tool Misuse**: An agent processing user input gets injected with instructions that cause it to invoke tools outside its intended task scope (e.g., a summarization agent suddenly calling `http_post` to an external endpoint).
 
@@ -44,7 +44,7 @@ Reference architecture: Anthropic's "Building a C Compiler with a team of parall
 
 12. **Emergent Team-Level Capability Escalation**: No individual agent has exfiltration capability, but Agent A has `read_file` access and Agent B has `http_post` access. Through the shared codebase, Agent A writes data to a file that Agent B later transmits externally. The exfiltration capability **emerges from the team composition** without any single agent violating its individual constraints. Detection requires modeling the team's aggregate capability graph, not just individual agent permissions.
 
-13. **Test-Passing Adversarial Output**: In autonomous agent teams, the testing harness IS the safety boundary. An agent that passes all functional tests but introduces a backdoor, exfiltrates source code paths in commit messages, or modifies the build pipeline in a functionally invisible way has bypassed the only verification layer. ChainWatch detects **what the agent did** (tool call patterns), not whether the output is correct — a fundamentally complementary detection surface to functional testing.
+13. **Test-Passing Adversarial Output**: In autonomous agent teams, the testing harness IS the safety boundary. An agent that passes all functional tests but introduces a backdoor, exfiltrates source code paths in commit messages, or modifies the build pipeline in a functionally invisible way has bypassed the only verification layer. Aktov detects **what the agent did** (tool call patterns), not whether the output is correct — a fundamentally complementary detection surface to functional testing.
 
 ---
 
@@ -81,9 +81,9 @@ The SDK transmits only detection-relevant metadata — never raw argument values
 For users who want deeper detection or need to debug agent behavior, DEBUG mode adds selective field transmission:
 
 ```python
-cw = ChainWatch(api_key="cw_...", mode="debug")
+cw = Aktov(api_key="ak_...", mode="debug")
 # or with explicit field selection:
-cw = ChainWatch(api_key="cw_...", mode="debug", include_fields=["http_method", "status_code", "sql_statement_type", "target_domain"])
+cw = Aktov(api_key="ak_...", mode="debug", include_fields=["http_method", "status_code", "sql_statement_type", "target_domain"])
 ```
 
 DEBUG mode sends everything SAFE mode sends, plus allowlisted argument fields. Still no raw bodies, no raw error messages, no code snippets.
@@ -95,7 +95,7 @@ DEBUG mode sends everything SAFE mode sends, plus allowlisted argument fields. S
 The SDK includes a CLI tool that shows exactly what data will be transmitted for a given trace — before any data is sent. This is the trust UX that eliminates uncertainty for both solos and enterprise security review.
 
 ```bash
-$ chainwatch preview --trace example_trace.json
+$ aktov preview --trace example_trace.json
 ┌──────────────────────────────────────────────────────┐
 │ SAFE mode — what will be transmitted:                │
 ├──────────────────────────────────────────────────────┤
@@ -138,9 +138,9 @@ $ chainwatch preview --trace example_trace.json
 - **Privacy audit logging**: immutable append-only log of all privacy config changes
 - **Self-hosted detection engine**: entire pipeline runs in customer's environment — zero data egress
 
-### ChainWatch Self-Threat Model
+### Aktov Self-Threat Model
 
-ChainWatch itself is an attack surface. Enterprise buyers will ask how ChainWatch protects against threats to its own infrastructure.
+Aktov itself is an attack surface. Enterprise buyers will ask how Aktov protects against threats to its own infrastructure.
 
 | Threat | Impact | Mitigation |
 | ------ | ------ | ---------- |
@@ -176,18 +176,18 @@ ChainWatch itself is an attack surface. Enterprise buyers will ask how ChainWatc
                │ Raw tool calls (arguments, outcomes, timing)
                ▼
 ┌─────────────────────────────────────────────────────────────┐
-│    SDK — Open Source (pip install chainwatch)                │
+│    SDK — Open Source (pip install aktov)                │
 │                                                             │
 │  ┌───────────────────────────────────────────────────────┐  │
 │  │  1. Framework auto-detection (or explicit import)     │  │
-│  │  2. Field canonicalization (framework → ChainWatch)   │  │
+│  │  2. Field canonicalization (framework → Aktov)   │  │
 │  │  3. Tool category auto-mapping (tool → read/write/..) │  │
 │  │  4. Semantic flag extraction (client-side, no raw     │  │
 │  │     args leave unless DEBUG mode)                     │  │
 │  │  5. Trace assembly + async transmission               │  │
 │  │                                                       │  │
 │  │  Mode: SAFE (default) | DEBUG (opt-in)                │  │
-│  │  CLI: chainwatch preview --trace <file>               │  │
+│  │  CLI: aktov preview --trace <file>               │  │
 │  └───────────────────────────────────────────────────────┘  │
 │                                                             │
 │  Output: Canonical trace (semantic flags + metadata)        │
@@ -206,8 +206,8 @@ ChainWatch itself is an attack surface. Enterprise buyers will ask how ChainWatc
 │          Open-Source Detection Layer                         │
 │                                                             │
 │  ┌─────────────────────┐                                    │
-│  │  Rule-Based Engine   │  Deterministic rules (CW-001     │
-│  │  (YAML / Python DSL) │  through CW-051). Open-source    │
+│  │  Rule-Based Engine   │  Deterministic rules (AK-001     │
+│  │  (YAML / Python DSL) │  through AK-051). Open-source    │
 │  │  - Pattern matching  │  rule library: "Sigma for agents" │
 │  │  - Semantic flag     │                                   │
 │  │    analysis          │                                   │
@@ -317,13 +317,13 @@ Every ingested trace conforms to this schema.
 
 **DEBUG mode:** SDK sends everything SAFE mode sends, plus raw `arguments` for allowlisted fields. Detection capability: ~85-95%.
 
-Use `chainwatch preview --trace <file>` to inspect exactly what will be transmitted before any data leaves.
+Use `aktov preview --trace <file>` to inspect exactly what will be transmitted before any data leaves.
 
 ### Detection Rule Format
 
 Rules are expressed as code, version-controlled, testable. Two formats supported.
 
-**v1 SaaS rule authoring**: Customer-authored custom rules use YAML + constrained expression language only. Python DSL rules are ChainWatch-authored system rules only (shipped as part of the detection rule library). Customer Python DSL is available in future on-prem/local tier.
+**v1 SaaS rule authoring**: Customer-authored custom rules use YAML + constrained expression language only. Python DSL rules are Aktov-authored system rules only (shipped as part of the detection rule library). Customer Python DSL is available in future on-prem/local tier.
 
 #### Declarative YAML Rules
 
@@ -359,7 +359,7 @@ mitre_mapping: null # future: map to agent-specific ATT&CK-style framework
 #### Python DSL Rules (for complex logic)
 
 ```python
-from chainwatch.rules import Rule, when, action_chain
+from aktov.rules import Rule, when, action_chain
 
 @Rule(
     id="CW-2025-007",
@@ -422,9 +422,9 @@ def detect_sql_ddl(trace):
 
 ## Behavioral Modeling Engine (Core Detection IP)
 
-The deterministic rule library (CW-001 through CW-051) is Layer 1 — necessary for immediate, explainable value but easily replicable. Any detection engineer can write conditional logic on categorical fields. The compounding advantage comes from the full system: **canonicalization + rule ecosystem + corpus/tuning loops + statistical behavioral modeling** that learns what "normal" looks like per agent archetype and detects novel anomalies that no predefined rule anticipates.
+The deterministic rule library (AK-001 through AK-051) is Layer 1 — necessary for immediate, explainable value but easily replicable. Any detection engineer can write conditional logic on categorical fields. The compounding advantage comes from the full system: **canonicalization + rule ecosystem + corpus/tuning loops + statistical behavioral modeling** that learns what "normal" looks like per agent archetype and detects novel anomalies that no predefined rule anticipates.
 
-This follows the same evolutionary path as endpoint security: signature-based AV → behavioral detection → UEBA. ChainWatch's detection architecture is a layered Funnel of Fidelity with three detection layers.
+This follows the same evolutionary path as endpoint security: signature-based AV → behavioral detection → UEBA. Aktov's detection architecture is a layered Funnel of Fidelity with three detection layers.
 
 ### Layer 1: Deterministic Rules (Current Rule Library)
 
@@ -538,7 +538,7 @@ The Anthropic C compiler project (Feb 2026) demonstrated 16 autonomous agents wi
 
 ### Team-Level Telemetry Model
 
-In addition to individual agent traces, ChainWatch ingests **team context** when agents operate in coordinated groups:
+In addition to individual agent traces, Aktov ingests **team context** when agents operate in coordinated groups:
 
 ```json
 {
@@ -597,11 +597,11 @@ In addition to individual agent traces, ChainWatch ingests **team context** when
 - Identify **emergent capability paths** — Agent A writes data to a shared file, Agent B reads that file and transmits externally
 - Flag capability paths that constitute exfiltration, privilege escalation, or unauthorized access when composed across agents, even when no individual agent violates its own constraints
 
-### Team Detection Rules (v2 — CW-100 Series)
+### Team Detection Rules (v2 — AK-100 Series)
 
 | Rule ID | Rule Name                         | Detection Layer         | Description                                                                               |
 | ------- | --------------------------------- | ----------------------- | ----------------------------------------------------------------------------------------- |
-| CW-100  | Team task distribution anomaly    | Cross-agent correlation | Task type distribution deviates significantly from historical team baseline               |
+| AK-100  | Team task distribution anomaly    | Cross-agent correlation | Task type distribution deviates significantly from historical team baseline               |
 | CW-101  | Post-merge behavioral shift       | Temporal causality      | Multiple agents' tool patterns change after incorporating specific agent's output         |
 | CW-102  | Infrastructure lock concentration | Resource access         | Single agent acquires disproportionate locks on security-sensitive resources              |
 | CW-103  | Emergent exfiltration path        | Capability graph        | Cross-agent tool composition creates data egress capability no individual agent possesses |
@@ -643,8 +643,8 @@ In addition to individual agent traces, ChainWatch ingests **team context** when
 
 ### SDKs (Client Libraries)
 
-- **Python SDK**: `chainwatch` (open-source) — auto-detect framework, schema canonicalization, semantic flag extraction, SAFE/DEBUG modes. Callback integrations for LangChain, CrewAI, AutoGen, raw OpenAI/Anthropic, MCP.
-- **TypeScript SDK**: `chainwatch-js` — callback integrations for Vercel AI SDK, LangChain.js, MCP clients
+- **Python SDK**: `aktov` (open-source) — auto-detect framework, schema canonicalization, semantic flag extraction, SAFE/DEBUG modes. Callback integrations for LangChain, CrewAI, AutoGen, raw OpenAI/Anthropic, MCP.
+- **TypeScript SDK**: `aktov-js` — callback integrations for Vercel AI SDK, LangChain.js, MCP clients
 - Priority: Python SDK first (majority of agent frameworks are Python-native)
 
 ---
@@ -963,7 +963,7 @@ PATCH /v1/alerts/{alert_id}  — update status (acknowledge, resolve, false_posi
 {
   "alert_id": "a1b2c3d4-...",
   "severity": "critical",
-  "rule_id": "CW-001",
+  "rule_id": "AK-001",
   "rule_name": "Read-only agent write operation",
   "category": "capability_escalation",
   "agent_id": "my-summarizer-agent",
@@ -990,8 +990,8 @@ PATCH /v1/alerts/{alert_id}  — update status (acknowledge, resolve, false_posi
 #### Example Slack Notification
 
 ```
-🚨 *ChainWatch Alert — CRITICAL*
-*Read-only agent performed write operation* (CW-001)
+🚨 *Aktov Alert — CRITICAL*
+*Read-only agent performed write operation* (AK-001)
 
 Agent: `my-summarizer-agent` (summarizer)
 Tool: `write_file` → category: *write*
@@ -1000,7 +1000,7 @@ Trace: `t9x8y7z6-...`
 This agent has *never* performed a write in 847 previous traces.
 Possible prompt injection or misconfiguration.
 
-[View Alert →](https://app.chainwatch.dev/alerts/a1b2c3d4)
+[View Alert →](https://app.aktov.dev/alerts/a1b2c3d4)
 ```
 
 ### Rules
@@ -1039,9 +1039,9 @@ GET /v1/agents/{agent_id}/traces — historical traces for an agent
 ### Minimal Integration (2 Lines)
 
 ```python
-from chainwatch import ChainWatch
+from aktov import Aktov
 
-cw = ChainWatch(api_key="cw_...")  # SAFE mode by default — no raw args leave
+cw = Aktov(api_key="ak_...")  # SAFE mode by default — no raw args leave
 ```
 
 That's it. The SDK auto-detects the agent framework, canonicalizes fields, computes semantic flags client-side, and transmits only detection-relevant metadata.
@@ -1050,20 +1050,20 @@ That's it. The SDK auto-detects the agent framework, canonicalizes fields, compu
 
 ```python
 # SAFE mode (default) — no raw arguments transmitted
-cw = ChainWatch(api_key="cw_...")
+cw = Aktov(api_key="ak_...")
 
 # DEBUG mode — adds selective raw field transmission for deeper detection
-cw = ChainWatch(api_key="cw_...", mode="debug")
+cw = Aktov(api_key="ak_...", mode="debug")
 
 # DEBUG mode with explicit field selection
-cw = ChainWatch(api_key="cw_...", mode="debug", include_fields=["sql_statement_type", "target_domain", "status_code"])
+cw = Aktov(api_key="ak_...", mode="debug", include_fields=["sql_statement_type", "target_domain", "status_code"])
 ```
 
 ### Schema Canonicalization
 
-The SDK normalizes framework-specific fields into ChainWatch's canonical schema. Auto-detection inspects trace structure to determine framework; explicit integration imports are available as override.
+The SDK normalizes framework-specific fields into Aktov's canonical schema. Auto-detection inspects trace structure to determine framework; explicit integration imports are available as override.
 
-| Framework Field | ChainWatch Canonical | Notes |
+| Framework Field | Aktov Canonical | Notes |
 |---|---|---|
 | LangChain `AgentAction.tool` | `tool_name` | |
 | LangChain `AgentAction.tool_input` | `arguments` | |
@@ -1079,11 +1079,11 @@ The SDK normalizes framework-specific fields into ChainWatch's canonical schema.
 ### LangChain Integration
 
 ```python
-from chainwatch.integrations import langchain
+from aktov.integrations import langchain
 
 # Drop-in callback handler for LangChain
 callback = langchain.callback(
-    api_key="cw_...",
+    api_key="ak_...",
     agent_id="my-summarizer",
     agent_type="summarizer",
 )
@@ -1091,16 +1091,16 @@ callback = langchain.callback(
 # Attach to any LangChain agent
 agent = create_react_agent(llm, tools, callbacks=[callback])
 agent.invoke({"input": "Summarize Q4 revenue"})
-# ChainWatch captures the full action trace
+# Aktov captures the full action trace
 # Only semantic flags are transmitted (SAFE mode default)
 ```
 
 ### OpenAI Function Calling Integration
 
 ```python
-from chainwatch.integrations import openai as cw_openai
+from aktov.integrations import openai as cw_openai
 
-tracer = cw_openai.tracer(api_key="cw_...", agent_id="my-assistant")
+tracer = cw_openai.tracer(api_key="ak_...", agent_id="my-assistant")
 
 with tracer.trace(task_id="task_123", declared_intent="Answer customer query"):
     response = openai.chat.completions.create(
@@ -1109,18 +1109,18 @@ with tracer.trace(task_id="task_123", declared_intent="Answer customer query"):
         tools=[...],
     )
     tracer.record_tool_calls(response)
-    # SDK auto-canonicalizes OpenAI tool_calls → ChainWatch schema
+    # SDK auto-canonicalizes OpenAI tool_calls → Aktov schema
 ```
 
 ### MCP Client Integration
 
 ```python
-from chainwatch.integrations import mcp
+from aktov.integrations import mcp
 
 # Wraps an MCP client to intercept all tool invocations
 monitored_client = mcp.middleware(
     mcp_client=original_client,
-    api_key="cw_...",
+    api_key="ak_...",
     agent_id="mcp-agent-1",
 )
 # All MCP tool calls traced — semantic flags only in SAFE mode
@@ -1129,9 +1129,9 @@ monitored_client = mcp.middleware(
 ### Generic / Framework-Agnostic
 
 ```python
-from chainwatch import ChainWatch
+from aktov import Aktov
 
-cw = ChainWatch(api_key="cw_...")
+cw = Aktov(api_key="ak_...")
 
 trace = cw.start_trace(
     agent_id="custom-agent",
@@ -1160,11 +1160,11 @@ alerts = trace.end()  # sends trace, returns any synchronous alerts
 
 ```bash
 # See exactly what will be transmitted — before any data is sent
-$ chainwatch preview --trace example_trace.json
-$ chainwatch preview --trace example_trace.json --mode debug
+$ aktov preview --trace example_trace.json
+$ aktov preview --trace example_trace.json --mode debug
 
 # Pipe from stdin for CI/CD integration
-$ cat trace.json | chainwatch preview --mode safe
+$ cat trace.json | aktov preview --mode safe
 ```
 
 ---
@@ -1177,12 +1177,12 @@ $ cat trace.json | chainwatch preview --mode safe
 
 **OSS (SDK + Rule Library)**
 
-- Python SDK (`pip install chainwatch`) with framework auto-detection
+- Python SDK (`pip install aktov`) with framework auto-detection
 - Schema canonicalization: LangChain, OpenAI, Anthropic, MCP → canonical schema
 - Built-in tool → category auto-mapping with customer override
 - SAFE mode (default): client-side semantic flag extraction, no raw args transmitted
 - DEBUG mode (opt-in): selective field transmission
-- Preview CLI (`chainwatch preview --trace <file>`)
+- Preview CLI (`aktov preview --trace <file>`)
 - 10-12 deterministic rules that work in SAFE mode without baselines (see Phase 0 Rule Pack below)
 - Local rule evaluation (run deterministic rules without cloud connection)
 
@@ -1211,18 +1211,18 @@ These rules fire on categorical fields and semantic flags — no behavioral base
 
 | Rule ID | Rule Name | Trigger |
 |---|---|---|
-| CW-001 | Read-only agent write operation | `agent_type` in read-only set AND `tool_category` in [write, delete, execute] |
-| CW-010 | Read → external network egress | `tool_category=read` followed by `tool_category=network` + `is_external=true` in same trace |
-| CW-012 | Large payload to external network | `tool_category=network` + `is_external=true` + `argument_size_bucket=very_large` |
-| CW-023 | Write/execute/network with no preceding read | First tool in trace is write/execute/network category (no read phase) |
-| CW-030 | SQL DDL from non-DB agent | `sql_statement_type` in [DDL, DELETE, TRUNCATE] AND `agent_type` not in DB archetypes |
-| CW-031 | Sensitive directory access | `sensitive_dir_match=true` |
-| CW-032 | Path traversal detected | `path_traversal_detected=true` |
-| CW-007 | Credential tool from non-credential agent | `tool_category=credential` AND `agent_type` not in credential-authorized set |
-| CW-022 | Burst of failed tool calls | 3+ consecutive `outcome.status` in [failure, error] within one trace |
-| CW-020 | Extreme chain length | `action_count > 50` (static threshold, no baseline needed) |
-| CW-050 | Multiple external domains | 3+ distinct `is_external=true` network calls in one trace |
-| CW-041 | Repeated network failures | 3+ `tool_category=network` with `outcome.status=error` (possible scanning) |
+| AK-001 | Read-only agent write operation | `agent_type` in read-only set AND `tool_category` in [write, delete, execute] |
+| AK-010 | Read → external network egress | `tool_category=read` followed by `tool_category=network` + `is_external=true` in same trace |
+| AK-012 | Large payload to external network | `tool_category=network` + `is_external=true` + `argument_size_bucket=very_large` |
+| AK-023 | Write/execute/network with no preceding read | First tool in trace is write/execute/network category (no read phase) |
+| AK-030 | SQL DDL from non-DB agent | `sql_statement_type` in [DDL, DELETE, TRUNCATE] AND `agent_type` not in DB archetypes |
+| AK-031 | Sensitive directory access | `sensitive_dir_match=true` |
+| AK-032 | Path traversal detected | `path_traversal_detected=true` |
+| AK-007 | Credential tool from non-credential agent | `tool_category=credential` AND `agent_type` not in credential-authorized set |
+| AK-022 | Burst of failed tool calls | 3+ consecutive `outcome.status` in [failure, error] within one trace |
+| AK-020 | Extreme chain length | `action_count > 50` (static threshold, no baseline needed) |
+| AK-050 | Multiple external domains | 3+ distinct `is_external=true` network calls in one trace |
+| AK-041 | Repeated network failures | 3+ `tool_category=network` with `outcome.status=error` (possible scanning) |
 
 ### Phase 1 — After You Have Users + Data
 
@@ -1244,7 +1244,7 @@ Add complexity only when evidence warrants it (see Phase Gate Checklist below).
 ### v1.5 Scope
 
 - Agent team awareness (team context ingestion, team baselines)
-- **CW-100**: Team task distribution anomaly detection
+- **AK-100**: Team task distribution anomaly detection
 - **CW-104**: Agent role deviation within team
 - Enterprise privacy modes (granular allowlists, HMAC tokenization, privacy audit logging)
 - Trigram models (when per-archetype trace counts exceed 5K)
@@ -1282,7 +1282,7 @@ Do not add complexity until evidence triggers it.
 
 ### Three-Tier Detection Architecture
 
-**Layer 1 — Deterministic Rules (Phase 0, CW-001 to CW-051)**
+**Layer 1 — Deterministic Rules (Phase 0, AK-001 to AK-051)**
 High-confidence conditional logic on categorical fields. Zero ambiguity. Fires rarely, near-perfect signal-to-noise. Alert goes directly to analyst. Phase 0 ships 10-12 baseline-free rules; full library grows over time.
 
 **Layer 2 — N-Gram Sequence Anomaly Detection (Phase 1, CW-200 series)**
@@ -1291,31 +1291,31 @@ Statistical detection of novel or rare tool sequences via bigram frequency analy
 **Layer 3 — Markov Transition Probability Scoring (Phase 1, CW-300 series)**
 Aggregate trace anomaly scoring based on transition probabilities. Lower fidelity standalone, but essential for drift detection and composite correlation. Tracked as leading indicators; fires standalone alerts only on persistent anomalies. Activates after 100 traces per agent_type.
 
-**Layer 4 — Agent Team Correlation (v1.5/v2, CW-100 series)**
+**Layer 4 — Agent Team Correlation (v1.5/v2, AK-100 series)**
 Cross-agent behavioral analysis for multi-agent architectures. Detects coordination anomalies, poisoned artifact propagation, and emergent capability paths that per-agent detection cannot catch.
 
 ### Layer 1: Deterministic Rules
 
 | Rule ID | Rule Name                                | Category               |
 | ------- | ---------------------------------------- | ---------------------- |
-| CW-001  | Read-only agent write operation          | Capability escalation  |
-| CW-002  | Tool outside declared manifest           | Capability escalation  |
-| CW-003  | Tool category distribution deviation     | Capability escalation  |
-| CW-010  | Sequential read → network egress         | Exfiltration           |
-| CW-011  | High-entropy payload before network call | Exfiltration           |
-| CW-012  | Abnormally large payload in network args | Exfiltration           |
-| CW-020  | Chain length exceeds baseline            | Chain anomaly          |
-| CW-021  | Novel tool combination                   | Chain anomaly          |
-| CW-022  | Repeated failed tool calls               | Chain anomaly          |
-| CW-023  | Write/execute/network with no preceding read | Chain anomaly       |
-| CW-030  | SQL DDL from SELECT-baseline agent       | Argument anomaly       |
-| CW-031  | File path references sensitive directory | Argument anomaly       |
-| CW-032  | HTTP target is novel external domain     | Argument anomaly       |
-| CW-040  | Activity outside time-of-day pattern     | Temporal anomaly       |
-| CW-041  | Tool call burst above normal rate        | Temporal anomaly       |
-| CW-042  | Agent reactivation after dormancy        | Temporal anomaly       |
-| CW-050  | Delegated agent exceeds scope            | Delegation             |
-| CW-051  | Delegation chain depth threshold         | Delegation             |
+| AK-001  | Read-only agent write operation          | Capability escalation  |
+| AK-002  | Tool outside declared manifest           | Capability escalation  |
+| AK-003  | Tool category distribution deviation     | Capability escalation  |
+| AK-010  | Sequential read → network egress         | Exfiltration           |
+| AK-011  | High-entropy payload before network call | Exfiltration           |
+| AK-012  | Abnormally large payload in network args | Exfiltration           |
+| AK-020  | Chain length exceeds baseline            | Chain anomaly          |
+| AK-021  | Novel tool combination                   | Chain anomaly          |
+| AK-022  | Repeated failed tool calls               | Chain anomaly          |
+| AK-023  | Write/execute/network with no preceding read | Chain anomaly       |
+| AK-030  | SQL DDL from SELECT-baseline agent       | Argument anomaly       |
+| AK-031  | File path references sensitive directory | Argument anomaly       |
+| AK-032  | HTTP target is novel external domain     | Argument anomaly       |
+| AK-040  | Activity outside time-of-day pattern     | Temporal anomaly       |
+| AK-041  | Tool call burst above normal rate        | Temporal anomaly       |
+| AK-042  | Agent reactivation after dormancy        | Temporal anomaly       |
+| AK-050  | Delegated agent exceeds scope            | Delegation             |
+| AK-051  | Delegation chain depth threshold         | Delegation             |
 
 ### Layer 2: N-Gram Sequence Anomaly Rules
 
@@ -1342,7 +1342,7 @@ Cross-agent behavioral analysis for multi-agent architectures. Detects coordinat
 
 | Rule ID | Rule Name                         | Detection Layer         | Description                                                                               |
 | ------- | --------------------------------- | ----------------------- | ----------------------------------------------------------------------------------------- |
-| CW-100  | Team task distribution anomaly    | Cross-agent correlation | Task type distribution deviates significantly from historical team baseline               |
+| AK-100  | Team task distribution anomaly    | Cross-agent correlation | Task type distribution deviates significantly from historical team baseline               |
 | CW-101  | Post-merge behavioral shift       | Temporal causality      | Multiple agents' tool patterns change after incorporating specific agent's output         |
 | CW-102  | Infrastructure lock concentration | Resource access         | Single agent acquires disproportionate locks on security-sensitive resources              |
 | CW-103  | Emergent exfiltration path        | Capability graph        | Cross-agent tool composition creates data egress capability no individual agent possesses |
@@ -1354,39 +1354,39 @@ Cross-agent behavioral analysis for multi-agent architectures. Detects coordinat
 
 #### Capability Escalation
 
-- `CW-001`: Read-only agent performs write/delete/execute
-- `CW-002`: Agent invokes tool outside its declared tool manifest
-- `CW-003`: Agent's tool_category distribution deviates >2σ from baseline
+- `AK-001`: Read-only agent performs write/delete/execute
+- `AK-002`: Agent invokes tool outside its declared tool manifest
+- `AK-003`: Agent's tool_category distribution deviates >2σ from baseline
 
 #### Exfiltration Patterns
 
-- `CW-010`: Sequential read → network egress pattern
-- `CW-011`: High-entropy payload before network egress (suggests encoding/compression)
-- `CW-012`: Abnormally large payload in network egress tool arguments
+- `AK-010`: Sequential read → network egress pattern
+- `AK-011`: High-entropy payload before network egress (suggests encoding/compression)
+- `AK-012`: Abnormally large payload in network egress tool arguments
 
 #### Action Chain Anomalies
 
-- `CW-020`: Chain length exceeds 3σ of agent baseline
-- `CW-021`: Novel tool combination never seen in agent's history
-- `CW-022`: Repeated failed tool calls (brute-force pattern)
-- `CW-023`: Write/execute/network tool with no preceding read tool in the trace (high-risk tool first)
+- `AK-020`: Chain length exceeds 3σ of agent baseline
+- `AK-021`: Novel tool combination never seen in agent's history
+- `AK-022`: Repeated failed tool calls (brute-force pattern)
+- `AK-023`: Write/execute/network tool with no preceding read tool in the trace (high-risk tool first)
 
 #### Argument Anomalies
 
-- `CW-030`: SQL arguments contain DDL/DML when baseline is SELECT-only
-- `CW-031`: File path references sensitive directory
-- `CW-032`: HTTP target domain is novel/unseen in agent history
+- `AK-030`: SQL arguments contain DDL/DML when baseline is SELECT-only
+- `AK-031`: File path references sensitive directory
+- `AK-032`: HTTP target domain is novel/unseen in agent history
 
 #### Temporal Anomalies
 
-- `CW-040`: Agent activity outside historical time-of-day pattern
-- `CW-041`: Burst of tool calls significantly above normal rate
-- `CW-042`: Agent reactivation after extended dormancy period
+- `AK-040`: Agent activity outside historical time-of-day pattern
+- `AK-041`: Burst of tool calls significantly above normal rate
+- `AK-042`: Agent reactivation after extended dormancy period
 
 #### Delegation / Multi-Agent
 
-- `CW-050`: Delegated agent exceeds delegator's historical scope
-- `CW-051`: Delegation chain depth exceeds threshold
+- `AK-050`: Delegated agent exceeds delegator's historical scope
+- `AK-051`: Delegation chain depth exceeds threshold
 
 ---
 
@@ -1394,12 +1394,12 @@ Cross-agent behavioral analysis for multi-agent architectures. Detects coordinat
 
 ### Open-Core Model
 
-ChainWatch follows the **Cloudflare model** — enterprise-grade agent security accessible to everyone.
+Aktov follows the **Cloudflare model** — enterprise-grade agent security accessible to everyone.
 
 **Open-source (free forever):**
 - Python SDK with framework auto-detection, schema canonicalization, SAFE/DEBUG modes
-- Deterministic detection rule library (CW-001 through CW-051) — "Sigma for agents"
-- Preview CLI (`chainwatch preview`)
+- Deterministic detection rule library (AK-001 through AK-051) — "Sigma for agents"
+- Preview CLI (`aktov preview`)
 - Local rule evaluation (run deterministic rules without cloud)
 
 **Cloud (paid):**
@@ -1415,7 +1415,7 @@ ChainWatch follows the **Cloudflare model** — enterprise-grade agent security 
 
 | Tier       | Monthly Price | Traces/Month | Agents    | What You Get                                                                                     |
 | ---------- | ------------- | ------------ | --------- | ------------------------------------------------------------------------------------------------ |
-| OSS        | $0            | —            | —         | SDK + deterministic rules (CW-001–051). Run locally, no cloud.                                   |
+| OSS        | $0            | —            | —         | SDK + deterministic rules (AK-001–051). Run locally, no cloud.                                   |
 | Free Cloud | $0            | 5,000        | 3         | Cloud ingestion + deterministic rules + alert feed. 7-day retention. No stats layers.            |
 | Indie      | $19           | 25,000       | 5         | Cloud Layer 1-3 detection, email + webhook alerts, anomaly dashboards. 30-day retention.         |
 | Pro        | $79           | 250,000      | 25        | Custom YAML rules, full anomaly score history, baseline dashboards, priority support.             |
@@ -1425,7 +1425,7 @@ ChainWatch follows the **Cloudflare model** — enterprise-grade agent security 
 
 Overage: Indie hard-caps at limit (no surprise bills). Pro+ tiers: $0.30 per 1,000 traces above limit.
 
-**Agent team pricing:** Teams of >10 coordinated agents require Team tier or above. Enterprise tier includes full agent team detection (CW-100 series), cross-agent correlation, and coordination event analysis.
+**Agent team pricing:** Teams of >10 coordinated agents require Team tier or above. Enterprise tier includes full agent team detection (AK-100 series), cross-agent correlation, and coordination event analysis.
 
 ---
 
@@ -1433,7 +1433,7 @@ Overage: Indie hard-caps at limit (no surprise bills). Pro+ tiers: $0.30 per 1,0
 
 ### Launch Sequence
 
-1. **Open-source SDK + rule library on GitHub** — "Sigma for AI Agents" positioning, `pip install chainwatch`
+1. **Open-source SDK + rule library on GitHub** — "Sigma for AI Agents" positioning, `pip install aktov`
 2. **DEF CON Singapore paper** (Feb 15 deadline) — establishes threat model and credibility
 3. **Blog series**: "Agent Action Traces Are the New Endpoint Telemetry" — technical content marketing
 4. **Product Hunt / Hacker News launch** — "2 lines of code. Detections in 5 minutes." Self-serve signup funnel
@@ -1454,21 +1454,21 @@ Lead all marketing with: **"2 lines of code. Detections in 5 minutes."** The hea
 
 ### Positioning
 
-ChainWatch is **detection engineering for AI agents**. Not governance. Not compliance. Not observability. Detection. Open-source rule library + cloud statistical modeling. The same methodology that protects endpoints, networks, and cloud infrastructure — applied to the newest attack surface.
+Aktov is **detection engineering for AI agents**. Not governance. Not compliance. Not observability. Detection. Open-source rule library + cloud statistical modeling. The same methodology that protects endpoints, networks, and cloud infrastructure — applied to the newest attack surface.
 
-**Solo dev narrative:** Your agent runs tools. ChainWatch tells you when something looks wrong. Install the SDK, get detections. No config, no privacy concerns — SAFE mode means nothing raw leaves your machine.
+**Solo dev narrative:** Your agent runs tools. Aktov tells you when something looks wrong. Install the SDK, get detections. No config, no privacy concerns — SAFE mode means nothing raw leaves your machine.
 
-**Enterprise narrative:** When your organization runs 16 autonomous agents building software with no human in the loop — ChainWatch is the detection layer that tells you which agent is compromised, which merge introduced the vulnerability, and which cross-agent interaction created an exfiltration path. Enterprise-grade privacy controls, tenant isolation, and audit logging included.
+**Enterprise narrative:** When your organization runs 16 autonomous agents building software with no human in the loop — Aktov is the detection layer that tells you which agent is compromised, which merge introduced the vulnerability, and which cross-agent interaction created an exfiltration path. Enterprise-grade privacy controls, tenant isolation, and audit logging included.
 
 ---
 
 ## Key Technical Decisions & Rationale
 
-1. **Plug-and-play DX as primary differentiator**: `pip install chainwatch` + 2 lines of code → detections working. Auto-detect framework, auto-categorize tools, auto-baseline. The Cloudflare model — enterprise-grade security accessible to solo devs. DX is what gets adoption; detection quality is what keeps it.
+1. **Plug-and-play DX as primary differentiator**: `pip install aktov` + 2 lines of code → detections working. Auto-detect framework, auto-categorize tools, auto-baseline. The Cloudflare model — enterprise-grade security accessible to solo devs. DX is what gets adoption; detection quality is what keeps it.
 
 2. **SAFE mode by default, not full-args**: The SDK defaults to SAFE mode — no raw arguments transmitted, only semantic flags. This builds immediate trust with solo devs ("nothing leaves my machine") and satisfies enterprise legal ("we don't collect their data"). DEBUG mode is one flag away for users who want deeper detection. Simplify the privacy *implementation*, not the privacy *posture*.
 
-3. **Open-core model**: Open-source the SDK and deterministic rule library (CW-001–051). Statistical behavioral modeling (n-gram, Markov), alerting pipeline, and dashboards are cloud-only paid features. This gives: (a) OSS credibility and trust, (b) community-contributed detection rules, (c) natural upsell from free to paid, (d) defensible moat in the statistical layer.
+3. **Open-core model**: Open-source the SDK and deterministic rule library (AK-001–051). Statistical behavioral modeling (n-gram, Markov), alerting pipeline, and dashboards are cloud-only paid features. This gives: (a) OSS credibility and trust, (b) community-contributed detection rules, (c) natural upsell from free to paid, (d) defensible moat in the statistical layer.
 
 4. **Client-side semantic flag extraction**: The SDK computes low-cardinality semantic flags (sql_statement_type, http_method, is_external, etc.) from raw arguments locally and discards the raw values before transmission. This is the architectural innovation that enables ~70-80% detection coverage with zero raw data leaving the machine.
 
@@ -1488,7 +1488,7 @@ ChainWatch is **detection engineering for AI agents**. Not governance. Not compl
 
 12. **Layered detection with Funnel of Fidelity correlation**: Layer 1 (rules) alerts go directly to analysts. Layer 2 (n-gram) alerts are correlated with Layer 3 (Markov) scores before surfacing — a zero-frequency n-gram with a high aggregate anomaly score is a high-priority investigation; a zero-frequency n-gram with a normal aggregate score is lower priority. Layer 3 anomalies alone are tracked as leading indicators for drift but don't fire standalone alerts unless they persist.
 
-13. **Agent team detection as a separate architectural layer**: Team-level detection (CW-100 series) operates on a different data model than per-agent detection. Keeping it separate allows v1 to ship without team complexity while preserving a clean extension point for v1.5/v2.
+13. **Agent team detection as a separate architectural layer**: Team-level detection (AK-100 series) operates on a different data model than per-agent detection. Keeping it separate allows v1 to ship without team complexity while preserving a clean extension point for v1.5/v2.
 
 ---
 
@@ -1505,15 +1505,15 @@ ChainWatch is **detection engineering for AI agents**. Not governance. Not compl
 | Lasso Security  | LLM security             | Prompt-level protection. Not tool chain anomaly detection.                                                |
 | CalypsoAI       | LLM gateway              | Request-level filtering. No multi-step behavioral analysis.                                               |
 
-**DX differentiation**: No competitor offers `pip install` + 2 lines → working detections. LangSmith, Arize, and others require significant integration work and configuration. ChainWatch's open-source SDK with framework auto-detection and schema canonicalization makes adoption frictionless for solo devs and small teams.
+**DX differentiation**: No competitor offers `pip install` + 2 lines → working detections. LangSmith, Arize, and others require significant integration work and configuration. Aktov's open-source SDK with framework auto-detection and schema canonicalization makes adoption frictionless for solo devs and small teams.
 
-**Privacy differentiation**: Most LLM observability tools ingest full prompts, completions, and tool call arguments to their cloud. ChainWatch's SAFE mode (default) transmits only semantic flags — no raw arguments leave the machine. This is a structural trust advantage, not a feature toggle.
+**Privacy differentiation**: Most LLM observability tools ingest full prompts, completions, and tool call arguments to their cloud. Aktov's SAFE mode (default) transmits only semantic flags — no raw arguments leave the machine. This is a structural trust advantage, not a feature toggle.
 
 **Open-core differentiation**: The open-source rule library ("Sigma for agents") creates community-driven detection rule growth. Competitors with closed rule sets can't match community contributions. The compounding moat is the full system: canonicalization at the edge, rule ecosystem, corpus + tuning loops (threshold calibration, archetype priors, suppression logic), and distribution (dev-first wedge). Statistical models are commodity math — the value is in the *tuned system* built on real agent trace data.
 
 **Agent team differentiation**: No existing product monitors the behavioral patterns of autonomous agent teams. Cross-agent correlation, poisoned artifact propagation detection, and emergent capability analysis are novel detection surfaces.
 
-ChainWatch's unique position: **post-prompt, pre-consequence detection** — analyzing what agents _do_ after receiving instructions, not filtering the instructions themselves. Open-source rules + cloud statistical modeling + SAFE-mode privacy. Cloudflare for agentic detections.
+Aktov's unique position: **post-prompt, pre-consequence detection** — analyzing what agents _do_ after receiving instructions, not filtering the instructions themselves. Open-source rules + cloud statistical modeling + SAFE-mode privacy. Cloudflare for agentic detections.
 
 ---
 
@@ -1546,7 +1546,7 @@ ChainWatch's unique position: **post-prompt, pre-consequence detection** — ana
 ### Trace Ingestion & Infrastructure
 
 1. Should trace ingestion support batch mode (array of traces per request) for high-volume agent team customers (16+ agents generating traces simultaneously)?
-2. ~~Mode validation~~ **RESOLVED**: Server **strictly rejects** SAFE traces containing raw `arguments` (422). SDK provides `CW_DEV_MODE=1` env var to allow sending debug fields during local development without switching modes. In production, mode is enforced.
+2. ~~Mode validation~~ **RESOLVED**: Server **strictly rejects** SAFE traces containing raw `arguments` (422). SDK provides `AK_DEV_MODE=1` env var to allow sending debug fields during local development without switching modes. In production, mode is enforced.
 
 ### Behavioral Modeling Engine
 
@@ -1558,9 +1558,9 @@ ChainWatch's unique position: **post-prompt, pre-consequence detection** — ana
 
 ### Detection Quality
 
-8. ~~Python DSL sandboxing~~ **RESOLVED**: v1 SaaS supports YAML rules + constrained expression language only for customer-authored rules. Python DSL is reserved for ChainWatch-authored system rules. Customer Python DSL available only in future on-prem/local tier or via hardened sandbox (microVM/WASM). This eliminates the RCE-as-a-feature risk.
+8. ~~Python DSL sandboxing~~ **RESOLVED**: v1 SaaS supports YAML rules + constrained expression language only for customer-authored rules. Python DSL is reserved for Aktov-authored system rules. Customer Python DSL available only in future on-prem/local tier or via hardened sandbox (microVM/WASM). This eliminates the RCE-as-a-feature risk.
 9. ~~Alert deduplication~~ **RESOLVED**: Suppress repeated alerts for same `rule_id + agent_id` within a **1-hour window** with count aggregation. Configurable window in v1.1. For statistical layers (L2/L3), deduplication is score-threshold-based: only re-alert if anomaly score increases by >1σ from the suppressed alert.
-10. ~~Cold start~~ **RESOLVED**: **Deterministic rules only for the first 30 traces per agent_type.** After 30 traces, bigram frequency tables activate. Markov scoring activates after 100 traces. No cross-customer data sharing in v1. Curated archetype priors (e.g., "summarizer typically uses read→summarize→write") shipped as defaults in cloud — not learned from customer data, hand-authored by ChainWatch.
+10. ~~Cold start~~ **RESOLVED**: **Deterministic rules only for the first 30 traces per agent_type.** After 30 traces, bigram frequency tables activate. Markov scoring activates after 100 traces. No cross-customer data sharing in v1. Curated archetype priors (e.g., "summarizer typically uses read→summarize→write") shipped as defaults in cloud — not learned from customer data, hand-authored by Aktov.
 
 ### Open-Core & Community
 
@@ -1569,7 +1569,7 @@ ChainWatch's unique position: **post-prompt, pre-consequence detection** — ana
 
 ### Agent Teams
 
-13. How should coordination events be ingested — as part of the trace payload (current design) or as a separate event stream? Separate stream allows coordination monitoring even when individual traces aren't sent (e.g., agent team using third-party harness that doesn't have ChainWatch SDK).
+13. How should coordination events be ingested — as part of the trace payload (current design) or as a separate event stream? Separate stream allows coordination monitoring even when individual traces aren't sent (e.g., agent team using third-party harness that doesn't have Aktov SDK).
 14. For Granger causality analysis on merge events (CW-101): what minimum trace volume per-agent is needed for statistically significant causal inference? Preliminary estimate: 50+ traces per agent, meaning teams need to be running for several hours before temporal causality detection activates.
 15. Team capability graph analysis (CW-103) requires modeling cross-agent resource dependencies. Should this be statically declared by the customer (explicit capability manifest per agent) or dynamically inferred from observed tool usage? Dynamic inference is more powerful but requires longer baseline period.
 

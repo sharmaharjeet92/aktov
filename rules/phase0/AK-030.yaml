@@ -1,0 +1,31 @@
+rule_id: AK-030
+name: sql_ddl_from_non_db_agent
+description: >
+  Detects SQL DDL operations (DROP, ALTER, CREATE, TRUNCATE, DELETE)
+  from agents not designated as database administrators. Uses semantic
+  flags — works in SAFE mode.
+severity: critical
+category: argument_anomaly
+layer: 1
+phase: 0
+requires_baseline: false
+safe_mode_compatible: true
+
+match:
+  conditions:
+    - field: agent_type
+      not_in: ["db_admin", "migration_runner", "schema_manager", "dba", "database_admin"]
+    - field: actions[*].semantic_flags.sql_statement_type
+      contains_any: ["DDL", "DELETE", "TRUNCATE"]
+  logic: ALL
+
+response:
+  alert: true
+  recommended_action: >
+    Investigate the SQL operation. This agent should not be running DDL
+    or destructive SQL. Check for prompt injection or misconfiguration.
+
+tags:
+  - argument_anomaly
+  - sql_injection
+  - destructive_operation

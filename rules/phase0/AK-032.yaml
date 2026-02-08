@@ -1,0 +1,28 @@
+rule_id: AK-032
+name: path_traversal_detected
+description: >
+  Detects tool calls with path traversal patterns (../) in arguments.
+  Classic directory traversal attack adapted for agent tool chains.
+severity: critical
+category: argument_anomaly
+layer: 1
+phase: 0
+requires_baseline: false
+safe_mode_compatible: true
+
+match:
+  conditions:
+    - field: actions[*].semantic_flags.path_traversal_detected
+      equals: true
+  logic: ALL
+
+response:
+  alert: true
+  recommended_action: >
+    Path traversal detected — this is a strong indicator of prompt injection
+    or adversarial input. Review the agent's recent inputs immediately.
+
+tags:
+  - argument_anomaly
+  - path_traversal
+  - prompt_injection_indicator

@@ -8,7 +8,7 @@ install:
 db:
 	docker compose up -d postgres
 	@echo "Waiting for Postgres..."
-	@until docker compose exec postgres pg_isready -U chainwatch > /dev/null 2>&1; do sleep 1; done
+	@until docker compose exec postgres pg_isready -U aktov > /dev/null 2>&1; do sleep 1; done
 	@echo "Postgres ready at localhost:5432"
 
 db-stop:
@@ -17,7 +17,7 @@ db-stop:
 # Start full stack (Postgres + Cloud)
 up:
 	docker compose up -d
-	@echo "ChainWatch running at http://localhost:8000"
+	@echo "Aktov running at http://localhost:8000"
 
 down:
 	docker compose down
@@ -28,7 +28,7 @@ migrate:
 
 # Seed dev data (org, API key, 12 system rules)
 seed:
-	uv run python cloud/src/chainwatch_cloud/scripts/seed_dev.py
+	uv run python cloud/src/aktov_cloud/scripts/seed_dev.py
 
 # Run all tests
 test:
@@ -53,7 +53,7 @@ format:
 
 # Run the cloud service locally (without Docker)
 serve:
-	uv run uvicorn chainwatch_cloud.main:app --reload --host 0.0.0.0 --port 8000
+	uv run uvicorn aktov_cloud.main:app --reload --host 0.0.0.0 --port 8000
 
 # Clean build artifacts
 clean:

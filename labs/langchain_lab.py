@@ -1,7 +1,7 @@
-"""Ollama + LangChain mini test lab for ChainWatch.
+"""Ollama + LangChain mini test lab for Aktov.
 
 Runs a lightweight agentic flow using Ollama (local LLM) + LangChain tools,
-with ChainWatch capturing every tool call as a trace.
+with Aktov capturing every tool call as a trace.
 
 Requirements:
     uv pip install langchain langchain-ollama langchain-community
@@ -28,8 +28,8 @@ from pathlib import Path
 # Add SDK to path for local dev
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "sdk" / "src"))
 
-from chainwatch import ChainWatch
-from chainwatch.integrations.langchain import ChainWatchCallbackHandler
+from aktov import Aktov
+from aktov.integrations.langchain import AktovCallbackHandler
 
 # --- Fake tools that simulate agent actions (no LLM needed for basic tracing) ---
 
@@ -83,7 +83,7 @@ def _safe_calc(a: float, op: str, b: float) -> float:
 # --- Scenarios ---
 
 
-def scenario_normal(cw: ChainWatch) -> None:
+def scenario_normal(cw: Aktov) -> None:
     """Normal summarizer workflow: read -> process -> write summary."""
     trace = cw.start_trace(
         agent_id="lab-summarizer",
@@ -120,7 +120,7 @@ def scenario_normal(cw: ChainWatch) -> None:
     print("  [normal] 3 actions recorded. No rules should fire.")
 
 
-def scenario_exfiltration(cw: ChainWatch) -> None:
+def scenario_exfiltration(cw: Aktov) -> None:
     """Suspicious exfiltration: read sensitive file -> POST to external."""
     trace = cw.start_trace(
         agent_id="lab-summarizer",
@@ -150,10 +150,10 @@ def scenario_exfiltration(cw: ChainWatch) -> None:
 
     payload = trace._build_payload()
     _save_trace(payload, "exfiltration")
-    print("  [exfiltration] 2 actions. Should trigger CW-010, CW-012, CW-031.")
+    print("  [exfiltration] 2 actions. Should trigger AK-010, AK-012, AK-031.")
 
 
-def scenario_capability_escalation(cw: ChainWatch) -> None:
+def scenario_capability_escalation(cw: Aktov) -> None:
     """Read-only agent executes DDL SQL."""
     trace = cw.start_trace(
         agent_id="lab-reader",
@@ -179,10 +179,10 @@ def scenario_capability_escalation(cw: ChainWatch) -> None:
 
     payload = trace._build_payload()
     _save_trace(payload, "capability_escalation")
-    print("  [capability_escalation] 2 actions. Should trigger CW-001, CW-030.")
+    print("  [capability_escalation] 2 actions. Should trigger AK-001, AK-030.")
 
 
-def scenario_burst_failures(cw: ChainWatch) -> None:
+def scenario_burst_failures(cw: Aktov) -> None:
     """Repeated network failures — possible brute force or DoS."""
     trace = cw.start_trace(
         agent_id="lab-scanner",
@@ -204,10 +204,10 @@ def scenario_burst_failures(cw: ChainWatch) -> None:
 
     payload = trace._build_payload()
     _save_trace(payload, "burst_failures")
-    print("  [burst_failures] 5 actions. Should trigger CW-022, CW-041.")
+    print("  [burst_failures] 5 actions. Should trigger AK-022, AK-041.")
 
 
-def scenario_path_traversal(cw: ChainWatch) -> None:
+def scenario_path_traversal(cw: Aktov) -> None:
     """Path traversal attempt."""
     trace = cw.start_trace(
         agent_id="lab-assistant",
@@ -231,10 +231,10 @@ def scenario_path_traversal(cw: ChainWatch) -> None:
 
     payload = trace._build_payload()
     _save_trace(payload, "path_traversal")
-    print("  [path_traversal] 2 actions. Should trigger CW-031, CW-032.")
+    print("  [path_traversal] 2 actions. Should trigger AK-031, AK-032.")
 
 
-def scenario_multi_domain(cw: ChainWatch) -> None:
+def scenario_multi_domain(cw: Aktov) -> None:
     """Hitting many external domains — suspicious for a focused agent."""
     trace = cw.start_trace(
         agent_id="lab-fetcher",
@@ -260,7 +260,7 @@ def scenario_multi_domain(cw: ChainWatch) -> None:
 
     payload = trace._build_payload()
     _save_trace(payload, "multi_domain")
-    print(f"  [multi_domain] {len(domains)} actions. Should trigger CW-050.")
+    print(f"  [multi_domain] {len(domains)} actions. Should trigger AK-050.")
 
 
 # --- Helpers ---
@@ -276,7 +276,7 @@ def _save_trace(payload, scenario_name: str) -> None:
 
 
 def run_with_langchain(model: str) -> None:
-    """Run a real LangChain ReAct agent with Ollama + ChainWatch callback.
+    """Run a real LangChain ReAct agent with Ollama + Aktov callback.
 
     This requires:
     - Ollama running locally
@@ -291,16 +291,16 @@ def run_with_langchain(model: str) -> None:
         print("    uv pip install langchain langchain-ollama langgraph")
         return
 
-    # Create ChainWatch client in DEBUG mode (we want full args for lab)
-    cw = ChainWatch(
-        api_key="cw_lab_test_key",
+    # Create Aktov client in DEBUG mode (we want full args for lab)
+    cw = Aktov(
+        api_key="ak_lab_test_key",
         mode="debug",
         base_url="http://localhost:8000",
         agent_id="lab-langchain-agent",
         agent_type="general_assistant",
     )
     trace = cw.start_trace(declared_intent="Answer user question using tools")
-    handler = ChainWatchCallbackHandler(client=cw, trace=trace)
+    handler = AktovCallbackHandler(client=cw, trace=trace)
 
     # Define simple tools
     @tool
@@ -355,7 +355,7 @@ def run_with_langchain(model: str) -> None:
         if trace._actions:
             payload = trace._build_payload()
             _save_trace(payload, "langchain_live")
-            print(f"  {len(trace._actions)} tool calls captured by ChainWatch!")
+            print(f"  {len(trace._actions)} tool calls captured by Aktov!")
         else:
             print("  No tool calls were made by the agent.")
             print("  Falling back to simulated scenario...")
@@ -380,7 +380,7 @@ SCENARIOS = {
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="ChainWatch test lab")
+    parser = argparse.ArgumentParser(description="Aktov test lab")
     parser.add_argument(
         "--scenario",
         choices=list(SCENARIOS.keys()),
@@ -399,14 +399,14 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    # ChainWatch client for simulated scenarios
-    cw = ChainWatch(
-        api_key="cw_lab_test_key",
+    # Aktov client for simulated scenarios
+    cw = Aktov(
+        api_key="ak_lab_test_key",
         mode="debug",
         base_url="http://localhost:8000",
     )
 
-    print("=== ChainWatch Test Lab ===\n")
+    print("=== Aktov Test Lab ===\n")
 
     if args.live:
         print("[Live Mode] Running LangChain + Ollama agent:")
@@ -424,7 +424,7 @@ def main() -> None:
             fn(cw)
 
     print(f"\nTraces saved to: labs/output/")
-    print("Run `chainwatch preview --trace labs/output/<file>.json` to inspect.")
+    print("Run `aktov preview --trace labs/output/<file>.json` to inspect.")
 
 
 if __name__ == "__main__":

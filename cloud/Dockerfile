@@ -15,6 +15,6 @@ COPY rules/ rules/
 RUN uv sync --all-packages --all-extras --frozen
 
 # Run migrations then start the server
-CMD ["sh", "-c", "uv run alembic -c cloud/alembic.ini upgrade head && uv run uvicorn chainwatch_cloud.main:app --host 0.0.0.0 --port 8000"]
+CMD ["sh", "-c", "uv run alembic -c cloud/alembic.ini upgrade head && uv run uvicorn aktov_cloud.main:app --host 0.0.0.0 --port 8000"]
 
 EXPOSE 8000
