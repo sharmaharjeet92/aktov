@@ -1,13 +1,11 @@
 """Aktov CLI entry point.
 
-Provides a ``preview`` command that shows what data would be transmitted
-to the cloud API for a given trace file, with semantic flag extraction
-applied.
+Commands::
 
-Usage::
-
-    aktov preview --trace trace.json --mode safe
-    aktov preview --trace trace.json --mode debug
+    aktov init <framework>     — set up Aktov for your framework
+    aktov scan trace.json      — evaluate traces against detection rules
+    aktov report               — show alerts from latest Claude Code session
+    aktov preview              — preview what data would be sent to cloud
 """
 
 from __future__ import annotations
@@ -23,6 +21,198 @@ from aktov.rules.engine import RuleEngine
 from aktov.schema import SemanticFlags, TracePayload
 from aktov.semantic_flags import extract_semantic_flags
 
+
+# ---------------------------------------------------------------------------
+# init command
+# ---------------------------------------------------------------------------
+
+INIT_SNIPPETS = {
+    "claude-code": None,  # handled specially — writes config file
+    "openai-agents": '''\
+Add these lines to your agent code:
+
+    from aktov.integrations.openai_agents import AktovHooks
+
+    hooks = AktovHooks(aktov_agent_name="my-agent")
+    result = await Runner.run(agent, input="...", hooks=hooks)
+    response = hooks.end()
+    # response.alerts → [{"rule_id": "AK-010", "severity": "critical", ...}]
+''',
+    "langchain": '''\
+Add these lines to your agent code:
+
+    from aktov.integrations.langchain import AktovCallback
+
+    cb = AktovCallback(aktov_agent_name="my-agent")
+    agent.invoke("do something", config={"callbacks": [cb]})
+    response = cb.end()
+    # response.alerts → [{"rule_id": "AK-010", "severity": "critical", ...}]
+''',
+    "mcp": '''\
+Add these lines to your MCP client code:
+
+    from aktov.integrations.mcp import wrap
+
+    traced = wrap(mcp_client, aktov_agent_name="my-agent")
+    result = await traced.call_tool("read_file", {"path": "/data/report.csv"})
+    response = traced.end_trace()
+    # response.alerts → [{"rule_id": "AK-010", "severity": "critical", ...}]
+''',
+    "custom": '''\
+Use the core API directly in your agent code:
+
+    from aktov import Aktov
+
+    ak = Aktov(agent_id="my-agent", agent_type="custom")
+    trace = ak.start_trace()
+
+    # After each tool call in your agent loop:
+    trace.record_action(tool_name="read_file", arguments={"path": "/data/report.csv"})
+
+    response = trace.end()
+    # response.alerts → [{"rule_id": "AK-010", "severity": "critical", ...}]
+''',
+}
+
+
+def _init_claude_code() -> None:
+    """Write Claude Code PostToolUse hook config to .claude/settings.json."""
+    settings_dir = Path(".claude")
+    settings_file = settings_dir / "settings.json"
+
+    # Load existing settings or start fresh
+    settings: dict[str, Any] = {}
+    if settings_file.exists():
+        try:
+            settings = json.loads(settings_file.read_text())
+        except json.JSONDecodeError:
+            settings = {}
+
+    # Add PostToolUse hook
+    hooks = settings.setdefault("hooks", {})
+    post_tool_use = hooks.setdefault("PostToolUse", [])
+
+    hook_command = "python -m aktov.hooks.claude_code"
+
+    # Check if already configured
+    for hook in post_tool_use:
+        if isinstance(hook, dict) and hook.get("command") == hook_command:
+            print("  Aktov hook already configured in .claude/settings.json")
+            return
+
+    post_tool_use.append({
+        "command": hook_command,
+        "async": True,
+    })
+
+    settings_dir.mkdir(parents=True, exist_ok=True)
+    settings_file.write_text(json.dumps(settings, indent=2) + "\n")
+
+    print("  Added PostToolUse hook to .claude/settings.json")
+    print()
+    print("  Aktov will now monitor Claude Code tool calls.")
+    print("  Alerts appear in real-time during sessions.")
+    print()
+    print("  To review after a session:")
+    print("    $ aktov report")
+    print()
+    print("  To connect to cloud (full ruleset + dashboard):")
+    print("    $ export AK_API_KEY=ak_...")
+
+
+def cmd_init(args: argparse.Namespace) -> None:
+    """Execute the ``init`` command."""
+    framework = args.framework
+
+    if framework not in INIT_SNIPPETS:
+        valid = ", ".join(sorted(INIT_SNIPPETS.keys()))
+        print(f"Unknown framework: {framework}")
+        print(f"Valid options: {valid}")
+        sys.exit(1)
+
+    print(f"\n  Setting up Aktov for {framework}\n")
+
+    if framework == "claude-code":
+        _init_claude_code()
+    else:
+        print(INIT_SNIPPETS[framework])
+
+    print("  Docs: https://aktov.io/docs")
+    print()
+
+
+# ---------------------------------------------------------------------------
+# report command
+# ---------------------------------------------------------------------------
+
+def cmd_report(args: argparse.Namespace) -> None:
+    """Show alerts from the latest Claude Code session trace."""
+    traces_dir = Path.home() / ".aktov" / "traces"
+
+    if not traces_dir.exists():
+        print("\n  No session traces found.")
+        print("  Run `aktov init claude-code` to start monitoring.\n")
+        return
+
+    # Find the most recent trace file
+    trace_files = sorted(traces_dir.glob("*.jsonl"), key=lambda p: p.stat().st_mtime, reverse=True)
+    if not trace_files:
+        print("\n  No session traces found.\n")
+        return
+
+    trace_file = trace_files[0]
+    print(f"\n  Latest session: {trace_file.name}\n")
+
+    # Load actions
+    actions: list[dict] = []
+    for line in trace_file.read_text().splitlines():
+        line = line.strip()
+        if line:
+            try:
+                actions.append(json.loads(line))
+            except json.JSONDecodeError:
+                continue
+
+    if not actions:
+        print("  (no actions recorded)\n")
+        return
+
+    # Evaluate
+    from aktov.client import Aktov
+    ak = Aktov(agent_id="claude-code", agent_type="claude-code")
+    trace = ak.start_trace()
+    for action in actions:
+        trace.record_action(
+            tool_name=action.get("tool_name", "unknown"),
+            arguments=action.get("arguments"),
+        )
+    response = trace.end()
+
+    print(f"  Tool calls: {len(actions)}")
+    print(f"  Rules evaluated: {response.rules_evaluated}")
+    print()
+
+    if not response.alerts:
+        print("  No alerts.\n")
+        return
+
+    # Print alert table
+    headers = ["Rule", "Severity", "Description"]
+    rows: list[list[str]] = []
+    for alert in response.alerts:
+        rows.append([
+            alert.get("rule_id", "???"),
+            alert.get("severity", "?").upper(),
+            alert.get("rule_name", "unknown"),
+        ])
+
+    _print_table(headers, rows)
+    print()
+
+
+# ---------------------------------------------------------------------------
+# preview command
+# ---------------------------------------------------------------------------
 
 def _load_trace_file(path: str) -> dict[str, Any]:
     """Load and parse a JSON trace file."""
@@ -52,21 +242,19 @@ def _format_flags(flags: SemanticFlags) -> str:
 
 def _print_table(headers: list[str], rows: list[list[str]]) -> None:
     """Print a simple formatted table to stdout."""
-    # Compute column widths
     widths = [len(h) for h in headers]
     for row in rows:
         for i, cell in enumerate(row):
             widths[i] = max(widths[i], len(cell))
 
-    # Header
     header_line = " | ".join(h.ljust(widths[i]) for i, h in enumerate(headers))
     separator = "-+-".join("-" * w for w in widths)
 
-    print(header_line)
-    print(separator)
+    print(f"  {header_line}")
+    print(f"  {separator}")
     for row in rows:
         line = " | ".join(cell.ljust(widths[i]) for i, cell in enumerate(row))
-        print(line)
+        print(f"  {line}")
 
 
 def cmd_preview(args: argparse.Namespace) -> None:
@@ -78,14 +266,12 @@ def cmd_preview(args: argparse.Namespace) -> None:
     print(f"  Aktov Trace Preview  (mode: {mode.upper()})")
     print(f"{'=' * 60}")
 
-    # Top-level metadata
     print(f"\n  Agent ID:    {trace_data.get('agent_id', 'N/A')}")
     print(f"  Agent Type:  {trace_data.get('agent_type', 'N/A')}")
     print(f"  Task ID:     {trace_data.get('task_id', 'N/A')}")
     print(f"  Intent:      {trace_data.get('declared_intent', 'N/A')}")
     print()
 
-    # Process actions
     actions = trace_data.get("actions", [])
     if not actions:
         print("  (no actions recorded)")
@@ -99,10 +285,8 @@ def cmd_preview(args: argparse.Namespace) -> None:
         tool_category = action.get("tool_category") or infer_tool_category(tool_name)
         arguments = action.get("arguments")
 
-        # Extract semantic flags
         flags = extract_semantic_flags(tool_name, tool_category, arguments)
 
-        # Format arguments column
         if mode == "safe":
             args_display = "[STRIPPED]"
         elif arguments:
@@ -121,7 +305,6 @@ def cmd_preview(args: argparse.Namespace) -> None:
 
     _print_table(headers, rows)
 
-    # Summary
     print(f"\n  Total actions: {len(actions)}")
     if mode == "safe":
         print("  Mode: SAFE — raw arguments are STRIPPED before transmission")
@@ -129,6 +312,10 @@ def cmd_preview(args: argparse.Namespace) -> None:
         print("  Mode: DEBUG — raw arguments are INCLUDED (use only in dev)")
     print()
 
+
+# ---------------------------------------------------------------------------
+# scan command
+# ---------------------------------------------------------------------------
 
 SEVERITY_COLORS = {
     "critical": "\033[91m",
@@ -212,6 +399,10 @@ def _load_traces(filepath: Path) -> list[dict]:
     return traces
 
 
+# ---------------------------------------------------------------------------
+# Main entry point
+# ---------------------------------------------------------------------------
+
 def main(argv: list[str] | None = None) -> None:
     """CLI entry point."""
     parser = argparse.ArgumentParser(
@@ -220,21 +411,21 @@ def main(argv: list[str] | None = None) -> None:
     )
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
 
-    # preview subcommand
-    preview_parser = subparsers.add_parser(
-        "preview",
-        help="Preview what data would be sent to the cloud API",
+    # init subcommand
+    init_parser = subparsers.add_parser(
+        "init",
+        help="Set up Aktov for your framework",
     )
-    preview_parser.add_argument(
-        "--trace",
-        required=True,
-        help="Path to a JSON trace file",
+    init_parser.add_argument(
+        "framework",
+        choices=sorted(INIT_SNIPPETS.keys()),
+        help="Target framework",
     )
-    preview_parser.add_argument(
-        "--mode",
-        choices=["safe", "debug"],
-        default="safe",
-        help="Transmission mode (default: safe)",
+
+    # report subcommand
+    subparsers.add_parser(
+        "report",
+        help="Show alerts from latest Claude Code session",
     )
 
     # scan subcommand
@@ -253,16 +444,87 @@ def main(argv: list[str] | None = None) -> None:
         help="Path to YAML rules directory (default: bundled samples)",
     )
 
+    # preview subcommand
+    preview_parser = subparsers.add_parser(
+        "preview",
+        help="Preview what data would be sent to the cloud API",
+    )
+    preview_parser.add_argument(
+        "--trace",
+        required=True,
+        help="Path to a JSON trace file",
+    )
+    preview_parser.add_argument(
+        "--mode",
+        choices=["safe", "debug"],
+        default="safe",
+        help="Transmission mode (default: safe)",
+    )
+
+    # rules subcommand group
+    rules_parser = subparsers.add_parser(
+        "rules",
+        help="Rule authoring tools: schema reference, validation, examples",
+    )
+    rules_sub = rules_parser.add_subparsers(
+        dest="rules_command", help="Rules subcommands",
+    )
+
+    # rules schema
+    schema_parser = rules_sub.add_parser(
+        "schema", help="Print available fields, operators, and match types",
+    )
+    schema_parser.add_argument(
+        "--fields", action="store_true", help="Show only fields",
+    )
+    schema_parser.add_argument(
+        "--operators", action="store_true", help="Show only operators",
+    )
+    schema_parser.add_argument(
+        "--match-types", action="store_true", help="Show only match types",
+    )
+
+    # rules validate
+    validate_parser = rules_sub.add_parser(
+        "validate", help="Validate a rule YAML file",
+    )
+    validate_parser.add_argument("file", help="Path to YAML rule file")
+
+    # rules examples
+    rules_sub.add_parser(
+        "examples", help="Rule-writing guide with examples of each match type",
+    )
+
     parsed = parser.parse_args(argv)
 
     if parsed.command is None:
         parser.print_help()
         sys.exit(1)
 
-    if parsed.command == "preview":
-        cmd_preview(parsed)
+    if parsed.command == "init":
+        cmd_init(parsed)
+    elif parsed.command == "report":
+        cmd_report(parsed)
     elif parsed.command == "scan":
         cmd_scan(parsed)
+    elif parsed.command == "preview":
+        cmd_preview(parsed)
+    elif parsed.command == "rules":
+        from aktov.cli.rules_cmd import (
+            cmd_rules_examples,
+            cmd_rules_schema,
+            cmd_rules_validate,
+        )
+
+        if parsed.rules_command == "schema":
+            cmd_rules_schema(parsed)
+        elif parsed.rules_command == "validate":
+            cmd_rules_validate(parsed)
+        elif parsed.rules_command == "examples":
+            cmd_rules_examples(parsed)
+        else:
+            rules_parser.print_help()
+            sys.exit(1)
 
 
 if __name__ == "__main__":

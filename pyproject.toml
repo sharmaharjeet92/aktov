@@ -1,6 +1,6 @@
 [project]
 name = "aktov"
-version = "0.2.0"
+version = "0.3.0"
 description = "Detection engineering for AI agents. Alerts when agents do weird or risky things."
 readme = "README.md"
 license = {file = "LICENSE"}
@@ -26,6 +26,7 @@ dependencies = [
 langchain = ["langchain-core>=0.3"]
 openai = ["openai>=1.0"]
 anthropic = ["anthropic>=0.40"]
+agents = ["openai-agents>=0.1"]
 dev = [
     "pytest>=8.0",
     "pytest-asyncio>=0.24",

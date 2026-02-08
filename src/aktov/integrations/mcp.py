@@ -1,22 +1,24 @@
-"""MCP (Model Context Protocol) middleware for Aktov.
+"""MCP (Model Context Protocol) integration for Aktov.
 
-Wraps an MCP client to intercept ``CallToolRequest`` invocations and
-record them as Aktov actions.
+Wraps an MCP client to intercept ``call_tool`` invocations and
+record them as Aktov actions automatically.
 
 Usage::
 
-    from aktov.integrations.mcp import middleware
+    from aktov.integrations.mcp import wrap
 
-    wrapped_client = middleware(mcp_client, api_key="ak_...", agent_id="mcp-agent")
-    # Use wrapped_client as normal — tool calls are traced automatically.
+    traced = wrap(mcp_client, aktov_agent_name="my-agent")
+    result = await traced.call_tool("read_file", {"path": "/data/report.csv"})
+    response = traced.end_trace()  # → TraceResponse with alerts
 """
 
 from __future__ import annotations
 
 import time
-from typing import Any, Optional
+from typing import Any
 
 from aktov.client import Aktov, Trace
+from aktov.schema import TraceResponse
 
 
 class MCPTracingWrapper:
@@ -34,7 +36,7 @@ class MCPTracingWrapper:
         trace: Trace,
     ) -> None:
         self._mcp_client = mcp_client
-        self._cw_client = aktov_client
+        self._aktov_client = aktov_client
         self._trace = trace
 
     def __getattr__(self, name: str) -> Any:
@@ -54,7 +56,6 @@ class MCPTracingWrapper:
         """
         start = time.monotonic()
         error_occurred = False
-        result = None
 
         try:
             result = await self._mcp_client.call_tool(name, arguments, **kwargs)
@@ -73,23 +74,23 @@ class MCPTracingWrapper:
                 latency_ms=latency_ms,
             )
 
-    def end_trace(self) -> Any:
-        """Finish the Aktov trace and submit it.
+    def end_trace(self) -> TraceResponse:
+        """Finish the Aktov trace and return alerts.
 
         Call this when the MCP session is complete.
         """
         return self._trace.end()
 
-    async def end_trace_async(self) -> Any:
+    async def end_trace_async(self) -> TraceResponse:
         """Async version of :py:meth:`end_trace`."""
         return await self._trace.end_async()
 
 
-def middleware(
+def wrap(
     mcp_client: Any,
-    api_key: str,
-    agent_id: str,
+    aktov_agent_name: str,
     *,
+    api_key: str | None = None,
     agent_type: str = "mcp",
     declared_intent: str | None = None,
     **kwargs: Any,
@@ -100,10 +101,10 @@ def middleware(
     ----------
     mcp_client:
         The MCP client instance to wrap.
+    aktov_agent_name:
+        Name for the agent being traced (required).
     api_key:
-        Aktov API key.
-    agent_id:
-        Identifier for the agent.
+        Aktov API key. Optional — omit for local-only evaluation.
     agent_type:
         Framework type (default ``"mcp"``).
     declared_intent:
@@ -118,13 +119,17 @@ def middleware(
     """
     ak = Aktov(
         api_key=api_key,
-        agent_id=agent_id,
+        agent_id=aktov_agent_name,
         agent_type=agent_type,
         **kwargs,
     )
-    trace = cw.start_trace(
-        agent_id=agent_id,
+    trace = ak.start_trace(
+        agent_id=aktov_agent_name,
         agent_type=agent_type,
         declared_intent=declared_intent,
     )
-    return MCPTracingWrapper(mcp_client, cw, trace)
+    return MCPTracingWrapper(mcp_client, ak, trace)
+
+
+# Backward compat alias
+middleware = wrap
