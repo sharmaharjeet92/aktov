@@ -95,14 +95,28 @@ def _init_claude_code() -> None:
     hook_command = "python -m aktov.hooks.claude_code"
 
     # Check if already configured
-    for hook in post_tool_use:
-        if isinstance(hook, dict) and hook.get("command") == hook_command:
+    for hook_entry in post_tool_use:
+        if not isinstance(hook_entry, dict):
+            continue
+        # Check both flat and nested formats
+        if hook_entry.get("command") == hook_command:
             print("  Aktov hook already configured in .claude/settings.json")
             return
+        for sub_hook in hook_entry.get("hooks", []):
+            if isinstance(sub_hook, dict) and sub_hook.get("command") == hook_command:
+                print("  Aktov hook already configured in .claude/settings.json")
+                return
 
     post_tool_use.append({
-        "command": hook_command,
-        "async": True,
+        "matcher": ".*",
+        "hooks": [
+            {
+                "type": "command",
+                "command": hook_command,
+                "timeout": 30,
+                "async": True,
+            }
+        ],
     })
 
     settings_dir.mkdir(parents=True, exist_ok=True)
