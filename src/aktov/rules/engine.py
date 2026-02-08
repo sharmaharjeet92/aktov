@@ -13,13 +13,14 @@ Supports the full Phase 0 YAML rule schema:
 
 from __future__ import annotations
 
+import importlib.resources
 import os
 from dataclasses import dataclass, field
 from typing import Any
 
 import yaml
 
-from chainwatch.schema import Action, TracePayload
+from aktov.schema import Action, TracePayload
 
 
 @dataclass
@@ -77,6 +78,15 @@ class RuleEngine:
                     loaded += 1
 
         return loaded
+
+    def load_bundled_rules(self) -> int:
+        """Load the sample rules bundled with the aktov package.
+
+        Returns the number of rules loaded.
+        """
+        samples = importlib.resources.files("aktov.rules") / "samples"
+        with importlib.resources.as_file(samples) as samples_dir:
+            return self.load_rules(str(samples_dir))
 
     def load_rule_from_dict(self, data: dict[str, Any]) -> YAMLRule:
         """Load a single rule from a dict (useful for testing)."""

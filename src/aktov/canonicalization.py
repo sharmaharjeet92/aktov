@@ -1,6 +1,6 @@
 """Tool category auto-mapping and canonicalization helpers.
 
-Maps framework-specific tool names to ChainWatch's canonical category
+Maps framework-specific tool names to Aktov's canonical category
 taxonomy so that rules can be written against categories rather than
 brittle tool names.
 """

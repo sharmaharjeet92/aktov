@@ -1,13 +1,13 @@
-"""MCP (Model Context Protocol) middleware for ChainWatch.
+"""MCP (Model Context Protocol) middleware for Aktov.
 
 Wraps an MCP client to intercept ``CallToolRequest`` invocations and
-record them as ChainWatch actions.
+record them as Aktov actions.
 
 Usage::
 
-    from chainwatch.integrations.mcp import middleware
+    from aktov.integrations.mcp import middleware
 
-    wrapped_client = middleware(mcp_client, api_key="cw-...", agent_id="mcp-agent")
+    wrapped_client = middleware(mcp_client, api_key="ak_...", agent_id="mcp-agent")
     # Use wrapped_client as normal — tool calls are traced automatically.
 """
 
@@ -16,7 +16,7 @@ from __future__ import annotations
 import time
 from typing import Any, Optional
 
-from chainwatch.client import ChainWatch, Trace
+from aktov.client import Aktov, Trace
 
 
 class MCPTracingWrapper:
@@ -24,17 +24,17 @@ class MCPTracingWrapper:
 
     Proxies all attribute access to the underlying MCP client, but
     intercepts ``call_tool`` to record each invocation through
-    ChainWatch.
+    Aktov.
     """
 
     def __init__(
         self,
         mcp_client: Any,
-        chainwatch_client: ChainWatch,
+        aktov_client: Aktov,
         trace: Trace,
     ) -> None:
         self._mcp_client = mcp_client
-        self._cw_client = chainwatch_client
+        self._cw_client = aktov_client
         self._trace = trace
 
     def __getattr__(self, name: str) -> Any:
@@ -47,7 +47,7 @@ class MCPTracingWrapper:
         arguments: dict[str, Any] | None = None,
         **kwargs: Any,
     ) -> Any:
-        """Intercept tool calls to record them via ChainWatch.
+        """Intercept tool calls to record them via Aktov.
 
         Delegates to the underlying MCP client's ``call_tool`` and
         records timing, outcome, and semantic flags.
@@ -74,7 +74,7 @@ class MCPTracingWrapper:
             )
 
     def end_trace(self) -> Any:
-        """Finish the ChainWatch trace and submit it.
+        """Finish the Aktov trace and submit it.
 
         Call this when the MCP session is complete.
         """
@@ -94,14 +94,14 @@ def middleware(
     declared_intent: str | None = None,
     **kwargs: Any,
 ) -> MCPTracingWrapper:
-    """Wrap an MCP client with ChainWatch tracing.
+    """Wrap an MCP client with Aktov tracing.
 
     Parameters
     ----------
     mcp_client:
         The MCP client instance to wrap.
     api_key:
-        ChainWatch API key.
+        Aktov API key.
     agent_id:
         Identifier for the agent.
     agent_type:
@@ -109,14 +109,14 @@ def middleware(
     declared_intent:
         Optional intent declaration for the trace.
     **kwargs:
-        Additional keyword arguments passed to :class:`ChainWatch`.
+        Additional keyword arguments passed to :class:`Aktov`.
 
     Returns
     -------
     MCPTracingWrapper
         A wrapped client that traces tool calls automatically.
     """
-    cw = ChainWatch(
+    ak = Aktov(
         api_key=api_key,
         agent_id=agent_id,
         agent_type=agent_type,

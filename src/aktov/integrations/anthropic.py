@@ -1,14 +1,14 @@
-"""Anthropic integration for ChainWatch.
+"""Anthropic integration for Aktov.
 
 Extracts tool_use blocks from Anthropic Messages API responses and
-records them as ChainWatch actions.
+records them as Aktov actions.
 
 Usage::
 
-    from chainwatch import ChainWatch
-    from chainwatch.integrations.anthropic import AnthropicTracer
+    from aktov import Aktov
+    from aktov.integrations.anthropic import AnthropicTracer
 
-    cw = ChainWatch(api_key="cw-...", agent_id="my-agent", agent_type="anthropic")
+    ak = Aktov(api_key="ak_...", agent_id="my-agent", agent_type="anthropic")
     tracer = AnthropicTracer(cw)
 
     with tracer.trace(declared_intent="summarize document") as t:
@@ -21,13 +21,13 @@ from __future__ import annotations
 from contextlib import contextmanager
 from typing import Any, Generator, Optional
 
-from chainwatch.client import ChainWatch, Trace
+from aktov.client import Aktov, Trace
 
 
 class AnthropicTracer:
-    """Traces Anthropic tool_use blocks through ChainWatch."""
+    """Traces Anthropic tool_use blocks through Aktov."""
 
-    def __init__(self, client: ChainWatch) -> None:
+    def __init__(self, client: Aktov) -> None:
         self._client = client
         self._active_trace: Trace | None = None
 

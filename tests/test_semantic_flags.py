@@ -1,8 +1,8 @@
-"""Tests for chainwatch.semantic_flags — client-side flag extraction."""
+"""Tests for aktov.semantic_flags — client-side flag extraction."""
 
 import pytest
 
-from chainwatch.semantic_flags import (
+from aktov.semantic_flags import (
     _compute_argument_size_bucket,
     _detect_http_method,
     _detect_is_external,
@@ -236,4 +236,4 @@ class TestExtractSemanticFlags:
 
 
 # Import for type reference in test_none_arguments
-from chainwatch.schema import SemanticFlags
+from aktov.schema import SemanticFlags

@@ -1,4 +1,4 @@
-"""ChainWatch CLI entry point.
+"""Aktov CLI entry point.
 
 Provides a ``preview`` command that shows what data would be transmitted
 to the cloud API for a given trace file, with semantic flag extraction
@@ -6,8 +6,8 @@ applied.
 
 Usage::
 
-    chainwatch preview --trace trace.json --mode safe
-    chainwatch preview --trace trace.json --mode debug
+    aktov preview --trace trace.json --mode safe
+    aktov preview --trace trace.json --mode debug
 """
 
 from __future__ import annotations
@@ -15,11 +15,13 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from pathlib import Path
 from typing import Any
 
-from chainwatch.canonicalization import infer_tool_category
-from chainwatch.schema import SemanticFlags
-from chainwatch.semantic_flags import extract_semantic_flags
+from aktov.canonicalization import infer_tool_category
+from aktov.rules.engine import RuleEngine
+from aktov.schema import SemanticFlags, TracePayload
+from aktov.semantic_flags import extract_semantic_flags
 
 
 def _load_trace_file(path: str) -> dict[str, Any]:
@@ -73,7 +75,7 @@ def cmd_preview(args: argparse.Namespace) -> None:
     mode = args.mode
 
     print(f"\n{'=' * 60}")
-    print(f"  ChainWatch Trace Preview  (mode: {mode.upper()})")
+    print(f"  Aktov Trace Preview  (mode: {mode.upper()})")
     print(f"{'=' * 60}")
 
     # Top-level metadata
@@ -128,11 +130,93 @@ def cmd_preview(args: argparse.Namespace) -> None:
     print()
 
 
+SEVERITY_COLORS = {
+    "critical": "\033[91m",
+    "high": "\033[93m",
+    "medium": "\033[94m",
+    "low": "\033[90m",
+}
+RESET = "\033[0m"
+
+
+def cmd_scan(args: argparse.Namespace) -> None:
+    """Execute the ``scan`` command — evaluate traces against bundled rules."""
+    engine = RuleEngine()
+
+    if args.rules_dir:
+        n = engine.load_rules(args.rules_dir)
+        source = args.rules_dir
+    else:
+        n = engine.load_bundled_rules()
+        source = "bundled samples"
+
+    print(f"\nLoaded {n} rules from {source}\n")
+
+    total_traces = 0
+    total_alerts = 0
+
+    for file_path in args.files:
+        path = Path(file_path)
+        if not path.exists():
+            print(f"  SKIP: {file_path} (not found)")
+            continue
+
+        traces = _load_traces(path)
+        print(f"--- {path.name} ({len(traces)} trace(s)) ---")
+
+        for i, raw_trace in enumerate(traces):
+            total_traces += 1
+            try:
+                payload = TracePayload(**raw_trace)
+            except Exception as e:
+                print(f"  trace[{i}]: PARSE ERROR: {e}")
+                continue
+
+            alerts = engine.evaluate(payload)
+            total_alerts += len(alerts)
+
+            agent = f"{payload.agent_id} ({payload.agent_type})"
+
+            if alerts:
+                for alert in alerts:
+                    color = SEVERITY_COLORS.get(alert.severity, "")
+                    print(
+                        f"  {color}ALERT{RESET} [{alert.rule_id}] "
+                        f"{alert.severity.upper()} — {alert.rule_name}"
+                    )
+                    print(f"        agent={agent}  matched={alert.matched_actions}")
+            else:
+                print(f"  OK — no alerts for {agent}")
+
+        print()
+
+    print(f"=== Summary: {total_traces} traces, {total_alerts} alerts ===\n")
+
+
+def _load_traces(filepath: Path) -> list[dict]:
+    """Load traces from a JSON or JSONL file."""
+    text = filepath.read_text()
+    try:
+        data = json.loads(text)
+        return data if isinstance(data, list) else [data]
+    except json.JSONDecodeError:
+        pass
+    traces = []
+    for line in text.strip().splitlines():
+        line = line.strip()
+        if line:
+            try:
+                traces.append(json.loads(line))
+            except json.JSONDecodeError:
+                continue
+    return traces
+
+
 def main(argv: list[str] | None = None) -> None:
     """CLI entry point."""
     parser = argparse.ArgumentParser(
-        prog="chainwatch",
-        description="ChainWatch CLI — detection engineering for AI agents",
+        prog="aktov",
+        description="Aktov CLI — detection engineering for AI agents",
     )
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
 
@@ -153,6 +237,22 @@ def main(argv: list[str] | None = None) -> None:
         help="Transmission mode (default: safe)",
     )
 
+    # scan subcommand
+    scan_parser = subparsers.add_parser(
+        "scan",
+        help="Scan trace files against detection rules",
+    )
+    scan_parser.add_argument(
+        "files",
+        nargs="+",
+        help="JSON/JSONL trace files to evaluate",
+    )
+    scan_parser.add_argument(
+        "--rules-dir",
+        default=None,
+        help="Path to YAML rules directory (default: bundled samples)",
+    )
+
     parsed = parser.parse_args(argv)
 
     if parsed.command is None:
@@ -161,6 +261,8 @@ def main(argv: list[str] | None = None) -> None:
 
     if parsed.command == "preview":
         cmd_preview(parsed)
+    elif parsed.command == "scan":
+        cmd_scan(parsed)
 
 
 if __name__ == "__main__":

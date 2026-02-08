@@ -1,4 +1,4 @@
-"""Canonical trace schema for ChainWatch.
+"""Canonical trace schema for Aktov.
 
 All framework-specific data is canonicalized into these models before
 transmission to the cloud API.  In SAFE mode, raw tool arguments are
@@ -83,7 +83,7 @@ class TeamContext(BaseModel):
 
 
 class TracePayload(BaseModel):
-    """Top-level payload sent to the ChainWatch cloud API."""
+    """Top-level payload sent to the Aktov cloud API."""
 
     model_config = ConfigDict(populate_by_name=True)
 
@@ -120,10 +120,12 @@ class TracePayload(BaseModel):
 
 
 class TraceResponse(BaseModel):
-    """Response from the ChainWatch cloud API after trace submission."""
+    """Response from the Aktov cloud API after trace submission."""
 
     model_config = ConfigDict(populate_by_name=True)
 
-    trace_id: str
+    trace_id: Optional[str] = None
+    status: Literal["sent", "dropped", "failed", "queued"] = "sent"
     rules_evaluated: int = 0
     alerts: list[dict[str, Any]] = Field(default_factory=list)
+    error_code: Optional[str] = None

@@ -1,4 +1,4 @@
-"""Python DSL for writing ChainWatch detection rules.
+"""Python DSL for writing Aktov detection rules.
 
 Rules are Python functions decorated with ``@Rule(...)`` that receive a
 trace and return a boolean (or a reason string) indicating whether the
@@ -6,7 +6,7 @@ rule matched.
 
 Example::
 
-    @Rule(id="CW-001", name="SQL after file read", severity="high", category="exfil")
+    @Rule(id="AK-001", name="SQL after file read", severity="high", category="exfil")
     def sql_after_file_read(trace):
         return (
             action_chain(trace)
@@ -23,7 +23,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Callable, Optional
 
-from chainwatch.schema import Action, TracePayload
+from aktov.schema import Action, TracePayload
 
 
 # ---------------------------------------------------------------------------
@@ -119,11 +119,11 @@ _RULE_REGISTRY: list[Rule] = []
 
 @dataclass
 class Rule:
-    """Decorator that marks a function as a ChainWatch detection rule.
+    """Decorator that marks a function as a Aktov detection rule.
 
     Usage::
 
-        @Rule(id="CW-001", name="Suspicious pattern", severity="high", category="exfil")
+        @Rule(id="AK-001", name="Suspicious pattern", severity="high", category="exfil")
         def my_rule(trace: TracePayload) -> bool:
             ...
     """

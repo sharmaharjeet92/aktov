@@ -10,7 +10,7 @@ from __future__ import annotations
 import re
 from typing import Any, Optional
 
-from chainwatch.schema import SemanticFlags
+from aktov.schema import SemanticFlags
 
 # ---------------------------------------------------------------------------
 # SQL detection

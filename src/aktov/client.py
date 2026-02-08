@@ -1,10 +1,10 @@
-"""ChainWatch client — the main entry point for instrumenting AI agents.
+"""Aktov client — the main entry point for instrumenting AI agents.
 
 Usage::
 
-    from chainwatch import ChainWatch
+    from aktov import Aktov
 
-    cw = ChainWatch(api_key="cw-...", agent_id="my-agent", agent_type="langchain")
+    ak = Aktov(api_key="ak_...", agent_id="my-agent", agent_type="langchain")
     trace = cw.start_trace(declared_intent="answer user question")
 
     trace.record_action(
@@ -20,39 +20,149 @@ Usage::
 
 from __future__ import annotations
 
+import atexit
 import asyncio
 import hashlib
 import logging
+import queue
+import threading
 import uuid
 from datetime import datetime, timezone
 from typing import Any, Optional
 
 import httpx
 
-from chainwatch.canonicalization import infer_tool_category
-from chainwatch.schema import (
+from aktov.canonicalization import infer_tool_category
+from aktov.schema import (
     Action,
     ActionOutcome,
     SemanticFlags,
     TracePayload,
     TraceResponse,
 )
-from chainwatch.semantic_flags import extract_semantic_flags
+from aktov.semantic_flags import extract_semantic_flags
 
-logger = logging.getLogger("chainwatch")
+logger = logging.getLogger("aktov")
 
+
+# ---------------------------------------------------------------------------
+# Background sender
+# ---------------------------------------------------------------------------
+
+class _BackgroundSender:
+    """Bounded-queue background sender with daemon thread.
+
+    Payloads are enqueued from the caller thread and sent by a daemon
+    worker.  When the queue is full, new payloads are dropped (never
+    blocks the caller).  On interpreter shutdown the worker does a
+    best-effort flush of remaining items.
+    """
+
+    def __init__(
+        self,
+        *,
+        base_url: str,
+        api_key: str,
+        timeout_ms: int,
+        queue_size: int,
+        flush_interval_ms: int,
+    ) -> None:
+        self._base_url = base_url
+        self._api_key = api_key
+        self._timeout_s = timeout_ms / 1000.0
+        self._flush_interval_s = flush_interval_ms / 1000.0
+        self._queue: queue.Queue[TracePayload | None] = queue.Queue(maxsize=queue_size)
+        self._stop = threading.Event()
+
+        # Metrics
+        self.sent_count = 0
+        self.dropped_count = 0
+        self.error_count = 0
+        self.last_error: str | None = None
+
+        self._thread = threading.Thread(target=self._worker, daemon=True, name="aktov-bg")
+        self._thread.start()
+        atexit.register(self.shutdown)
+
+    def enqueue(self, payload: TracePayload) -> bool:
+        """Enqueue a payload for async sending. Returns False if dropped."""
+        try:
+            self._queue.put_nowait(payload)
+            return True
+        except queue.Full:
+            self.dropped_count += 1
+            logger.warning(
+                "Aktov background queue full, dropping trace (dropped=%d)",
+                self.dropped_count,
+            )
+            return False
+
+    def shutdown(self) -> None:
+        """Signal the worker to stop and do a best-effort flush."""
+        self._stop.set()
+        try:
+            self._queue.put_nowait(None)  # sentinel to wake worker
+        except queue.Full:
+            pass  # worker will see _stop flag on next iteration
+        self._thread.join(timeout=2.0)
+
+    def _worker(self) -> None:
+        """Worker loop: drain queue and send payloads."""
+        url = f"{self._base_url}/v1/traces"
+        headers = {
+            "Authorization": f"Bearer {self._api_key}",
+            "Content-Type": "application/json",
+            "User-Agent": "aktov-python/0.1.0",
+        }
+
+        while not self._stop.is_set():
+            try:
+                payload = self._queue.get(timeout=self._flush_interval_s)
+            except queue.Empty:
+                continue
+
+            if payload is None:  # shutdown sentinel
+                break
+
+            self._send_one(payload, url, headers)
+
+        # Best-effort flush remaining items
+        while not self._queue.empty():
+            try:
+                payload = self._queue.get_nowait()
+            except queue.Empty:
+                break
+            if payload is None:
+                continue
+            self._send_one(payload, url, headers)
+
+    def _send_one(self, payload: TracePayload, url: str, headers: dict) -> None:
+        try:
+            with httpx.Client(timeout=self._timeout_s) as http:
+                resp = http.post(url, content=payload.model_dump_json(), headers=headers)
+                resp.raise_for_status()
+            self.sent_count += 1
+        except Exception as exc:
+            self.error_count += 1
+            self.last_error = str(exc)
+            logger.warning("Aktov background send failed: %s", exc)
+
+
+# ---------------------------------------------------------------------------
+# Trace
+# ---------------------------------------------------------------------------
 
 class Trace:
     """Represents an in-progress trace — a sequence of tool actions.
 
-    Create via :py:meth:`ChainWatch.start_trace`; do not instantiate
+    Create via :py:meth:`Aktov.start_trace`; do not instantiate
     directly.
     """
 
     def __init__(
         self,
         *,
-        client: ChainWatch,
+        client: Aktov,
         agent_id: str,
         agent_type: str,
         task_id: str | None = None,
@@ -90,7 +200,7 @@ class Trace:
         # Check max_actions cap
         if self._sequence_counter >= self._client._max_actions:
             logger.warning(
-                "ChainWatch max_actions (%d) reached, dropping '%s'",
+                "Aktov max_actions (%d) reached, dropping '%s'",
                 self._client._max_actions,
                 tool_name,
             )
@@ -166,14 +276,25 @@ class Trace:
         )
 
     def end(self) -> TraceResponse:
-        """Finish the trace and submit it to the ChainWatch cloud API.
+        """Finish the trace and submit it to the Aktov cloud API.
 
         Returns the API response containing the trace ID and any alerts.
         By default (raise_on_error=False), never raises — returns a stub
         response on failure so the agent is never blocked.
+
+        When ``background=True`` on the client, enqueues the payload and
+        returns immediately with ``status="queued"``.
         """
         payload = self._build_payload()
 
+        # Background mode: enqueue and return immediately
+        if self._client._bg_sender is not None:
+            accepted = self._client._bg_sender.enqueue(payload)
+            return TraceResponse(
+                status="queued" if accepted else "dropped",
+            )
+
+        # Synchronous mode
         try:
             try:
                 loop = asyncio.get_running_loop()
@@ -190,26 +311,32 @@ class Trace:
         except Exception as exc:
             if self._client._raise_on_error:
                 raise
-            logger.warning("ChainWatch trace.end() failed (fire-and-forget): %s", exc)
+            logger.warning("Aktov trace.end() failed (fire-and-forget): %s", exc)
             return TraceResponse(
-                trace_id="",
-                rules_evaluated=0,
-                alerts=[],
+                status="failed",
+                error_code=type(exc).__name__,
             )
 
     async def end_async(self) -> TraceResponse:
         """Async version of :py:meth:`end`."""
         payload = self._build_payload()
+
+        # Background mode: enqueue and return immediately
+        if self._client._bg_sender is not None:
+            accepted = self._client._bg_sender.enqueue(payload)
+            return TraceResponse(
+                status="queued" if accepted else "dropped",
+            )
+
         try:
             return await self._submit_async(payload)
         except Exception as exc:
             if self._client._raise_on_error:
                 raise
-            logger.warning("ChainWatch trace.end_async() failed: %s", exc)
+            logger.warning("Aktov trace.end_async() failed: %s", exc)
             return TraceResponse(
-                trace_id="",
-                rules_evaluated=0,
-                alerts=[],
+                status="failed",
+                error_code=type(exc).__name__,
             )
 
     async def _submit_async(self, payload: TracePayload) -> TraceResponse:
@@ -218,7 +345,7 @@ class Trace:
         headers = {
             "Authorization": f"Bearer {self._client._api_key}",
             "Content-Type": "application/json",
-            "User-Agent": "chainwatch-python/0.1.0",
+            "User-Agent": "aktov-python/0.1.0",
         }
 
         timeout = self._client._timeout_ms / 1000.0
@@ -230,16 +357,26 @@ class Trace:
                 headers=headers,
             )
             response.raise_for_status()
-            return TraceResponse(**response.json())
+            data = response.json()
+            return TraceResponse(
+                trace_id=data.get("trace_id"),
+                status="sent",
+                rules_evaluated=data.get("rules_evaluated", 0),
+                alerts=data.get("alerts", []),
+            )
 
 
-class ChainWatch:
-    """Top-level ChainWatch client.
+# ---------------------------------------------------------------------------
+# Client
+# ---------------------------------------------------------------------------
+
+class Aktov:
+    """Top-level Aktov client.
 
     Parameters
     ----------
     api_key:
-        API key for the ChainWatch cloud service.
+        API key for the Aktov cloud service.
     mode:
         ``"safe"`` (default) strips raw arguments; ``"debug"`` keeps them.
     base_url:
@@ -249,7 +386,7 @@ class ChainWatch:
     agent_type:
         Default agent framework type (can be overridden per trace).
     custom_tool_map:
-        Optional mapping of tool names → categories that takes precedence
+        Optional mapping of tool names -> categories that takes precedence
         over the built-in map.
     timeout_ms:
         HTTP POST timeout in milliseconds. Default 500ms.
@@ -260,6 +397,13 @@ class ChainWatch:
         If False (default), returns a stub response (fire-and-forget).
     framework:
         Framework name (e.g., "langchain") included in agent fingerprint.
+    background:
+        If True, trace.end() enqueues payloads to a background thread
+        and returns immediately with status="queued".
+    queue_size:
+        Max depth of the background sender queue (default 1000).
+    flush_interval_ms:
+        Max wait before the background worker flushes (default 5000ms).
     """
 
     def __init__(
@@ -268,7 +412,7 @@ class ChainWatch:
         *,
         mode: str = "safe",
         include_fields: list[str] | None = None,
-        base_url: str = "https://api.chainwatch.dev",
+        base_url: str = "https://api.aktov.dev",
         agent_id: str | None = None,
         agent_type: str | None = None,
         custom_tool_map: dict[str, str] | None = None,
@@ -276,6 +420,9 @@ class ChainWatch:
         max_actions: int = 200,
         raise_on_error: bool = False,
         framework: str | None = None,
+        background: bool = False,
+        queue_size: int = 1000,
+        flush_interval_ms: int = 5000,
     ) -> None:
         if mode not in ("safe", "debug"):
             raise ValueError(f"mode must be 'safe' or 'debug', got {mode!r}")
@@ -291,6 +438,29 @@ class ChainWatch:
         self._max_actions = max_actions
         self._raise_on_error = raise_on_error
         self._framework = framework
+
+        # Background sender
+        self._bg_sender: _BackgroundSender | None = None
+        if background:
+            self._bg_sender = _BackgroundSender(
+                base_url=self._base_url,
+                api_key=self._api_key,
+                timeout_ms=timeout_ms,
+                queue_size=queue_size,
+                flush_interval_ms=flush_interval_ms,
+            )
+
+    @property
+    def stats(self) -> dict[str, int | str | None]:
+        """Background sender stats. Returns empty dict if not in background mode."""
+        if self._bg_sender is None:
+            return {}
+        return {
+            "sent_count": self._bg_sender.sent_count,
+            "dropped_count": self._bg_sender.dropped_count,
+            "error_count": self._bg_sender.error_count,
+            "last_error": self._bg_sender.last_error,
+        }
 
     def start_trace(
         self,

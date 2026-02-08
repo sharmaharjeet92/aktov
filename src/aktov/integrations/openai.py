@@ -1,14 +1,14 @@
-"""OpenAI integration for ChainWatch.
+"""OpenAI integration for Aktov.
 
 Extracts tool calls from OpenAI ChatCompletion responses and records
-them as ChainWatch actions.
+them as Aktov actions.
 
 Usage::
 
-    from chainwatch import ChainWatch
-    from chainwatch.integrations.openai import OpenAITracer
+    from aktov import Aktov
+    from aktov.integrations.openai import OpenAITracer
 
-    cw = ChainWatch(api_key="cw-...", agent_id="my-agent", agent_type="openai")
+    ak = Aktov(api_key="ak_...", agent_id="my-agent", agent_type="openai")
     tracer = OpenAITracer(cw)
 
     with tracer.trace(declared_intent="answer user question") as t:
@@ -22,13 +22,13 @@ import json
 from contextlib import contextmanager
 from typing import Any, Generator, Optional
 
-from chainwatch.client import ChainWatch, Trace
+from aktov.client import Aktov, Trace
 
 
 class OpenAITracer:
-    """Traces OpenAI ChatCompletion tool calls through ChainWatch."""
+    """Traces OpenAI ChatCompletion tool calls through Aktov."""
 
-    def __init__(self, client: ChainWatch) -> None:
+    def __init__(self, client: Aktov) -> None:
         self._client = client
         self._active_trace: Trace | None = None
 

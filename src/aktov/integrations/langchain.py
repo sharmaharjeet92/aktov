@@ -1,11 +1,11 @@
-"""LangChain callback handler integration for ChainWatch.
+"""LangChain callback handler integration for Aktov.
 
 Automatically captures tool invocations from LangChain agents via the
 standard callback mechanism.
 
 Usage::
 
-    from chainwatch.integrations.langchain import callback
+    from aktov.integrations.langchain import callback
 
     handler = callback(api_key="cw-...", agent_id="my-agent", agent_type="langchain")
     agent.run("do something", callbacks=[handler])
@@ -18,7 +18,7 @@ import time
 from typing import Any, Optional
 from uuid import UUID
 
-from chainwatch.client import ChainWatch, Trace
+from aktov.client import Aktov, Trace
 
 # Conditional import — LangChain may not be installed.
 try:
@@ -35,8 +35,8 @@ except ImportError:
         pass
 
 
-class ChainWatchCallbackHandler(BaseCallbackHandler):
-    """LangChain callback handler that records tool calls via ChainWatch.
+class AktovCallbackHandler(BaseCallbackHandler):
+    """LangChain callback handler that records tool calls via Aktov.
 
     This handler listens for ``on_tool_start`` and ``on_tool_end`` events
     and records each tool invocation through the active :class:`Trace`.
@@ -44,7 +44,7 @@ class ChainWatchCallbackHandler(BaseCallbackHandler):
 
     def __init__(
         self,
-        client: ChainWatch,
+        client: Aktov,
         trace: Trace,
     ) -> None:
         if not _HAS_LANGCHAIN:
@@ -148,25 +148,25 @@ def callback(
     agent_id: str,
     agent_type: str = "langchain",
     **kwargs: Any,
-) -> ChainWatchCallbackHandler:
+) -> AktovCallbackHandler:
     """Factory function that creates a ready-to-use callback handler.
 
     Parameters
     ----------
     api_key:
-        ChainWatch API key.
+        Aktov API key.
     agent_id:
         Identifier for the agent being traced.
     agent_type:
         Agent framework type (default ``"langchain"``).
     **kwargs:
-        Additional keyword arguments passed to :class:`ChainWatch`.
+        Additional keyword arguments passed to :class:`Aktov`.
 
     Returns
     -------
-    ChainWatchCallbackHandler
+    AktovCallbackHandler
         A callback handler with an active trace.
     """
-    client = ChainWatch(api_key=api_key, agent_id=agent_id, agent_type=agent_type, **kwargs)
+    client = Aktov(api_key=api_key, agent_id=agent_id, agent_type=agent_type, **kwargs)
     trace = client.start_trace(agent_id=agent_id, agent_type=agent_type)
-    return ChainWatchCallbackHandler(client=client, trace=trace)
+    return AktovCallbackHandler(client=client, trace=trace)

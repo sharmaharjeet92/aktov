@@ -1,13 +1,15 @@
-# chainwatch
+# aktov
 
-Detection engineering for AI agents. `pip install chainwatch` + 2 lines of code → alerts when agents do weird or risky things.
+Detection engineering for AI agents. `pip install aktov` + 2 lines of code → alerts when agents do weird or risky things.
+
+The pattern never lies.
 
 ## Quick Start
 
 ```python
-from chainwatch import ChainWatch
+from aktov import Aktov
 
-cw = ChainWatch(api_key="cw_...")  # SAFE mode by default
+ak = Aktov(api_key="ak_...")  # SAFE mode by default
 ```
 
 That's it. Auto-detects your agent framework, extracts semantic flags client-side, transmits only detection-relevant metadata.
@@ -17,7 +19,7 @@ That's it. Auto-detects your agent framework, extracts semantic flags client-sid
 - Framework auto-detection (LangChain, OpenAI, Anthropic, MCP)
 - SAFE mode: no raw arguments leave your machine
 - 12 built-in detection rules
-- Preview CLI: `chainwatch preview --trace <file>`
+- Preview CLI: `aktov preview --trace <file>`
 
 ## License
 
