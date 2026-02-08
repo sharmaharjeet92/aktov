@@ -25,6 +25,7 @@ Environment variables::
     AK_RULES_DIR      — optional, path to custom YAML rules directory
     AK_API_KEY        — optional, Aktov API key for cloud features
     AK_OPENCLAW_DIR   — optional, path to OpenClaw home (default: ~/.openclaw)
+    AK_EXCLUSIONS_FILE — optional, path to YAML exclusion config
 """
 
 from __future__ import annotations
@@ -313,6 +314,7 @@ def _evaluate_and_alert(
     actions: list[dict[str, Any]],
     rules_dir: str | None = None,
     api_key: str | None = None,
+    exclusions_file: str | None = None,
 ) -> int:
     """Evaluate actions against rules and print alerts to stderr.
 
@@ -326,6 +328,7 @@ def _evaluate_and_alert(
         agent_id=agent_name,
         agent_type="openclaw",
         rules_dir=rules_dir,
+        exclusions_file=exclusions_file,
     )
     trace = ak.start_trace(agent_id=agent_name, agent_type="openclaw")
 
@@ -369,6 +372,7 @@ def check(
     agent_name: str = "openclaw",
     rules_dir: str | None = None,
     api_key: str | None = None,
+    exclusions_file: str | None = None,
 ) -> None:
     """One-shot scan of the latest OpenClaw session."""
     sessions = _find_sessions(openclaw_dir)
@@ -389,7 +393,9 @@ def check(
     _save_to_aktov_traces(session_name, actions)
 
     print(f"[aktov] Session: {session_file.name} — {len(actions)} tool call(s)", file=sys.stderr)
-    alert_count = _evaluate_and_alert(agent_name, actions, rules_dir, api_key)
+    alert_count = _evaluate_and_alert(
+        agent_name, actions, rules_dir, api_key, exclusions_file,
+    )
 
     if alert_count == 0:
         print("[aktov] No security issues detected.", file=sys.stderr)
@@ -493,6 +499,7 @@ def watch(
     agent_name: str = "openclaw",
     rules_dir: str | None = None,
     api_key: str | None = None,
+    exclusions_file: str | None = None,
 ) -> None:
     """Real-time OpenClaw session monitor.
 
@@ -555,7 +562,9 @@ def watch(
                     total_tool_calls += len(actions)
                     session_name = path.stem
                     _save_to_aktov_traces(session_name, actions)
-                    n = _evaluate_and_alert(agent_name, actions, rules_dir, api_key)
+                    n = _evaluate_and_alert(
+                        agent_name, actions, rules_dir, api_key, exclusions_file,
+                    )
                     total_alerts += n
                     if n == 0 and actions:
                         print(
@@ -580,7 +589,9 @@ def watch(
                 total_tool_calls += len(actions)
                 session_name = path.stem
                 _save_to_aktov_traces(session_name, actions)
-                n = _evaluate_and_alert(agent_name, actions, rules_dir, api_key)
+                n = _evaluate_and_alert(
+                    agent_name, actions, rules_dir, api_key, exclusions_file,
+                )
                 total_alerts += n
                 if n == 0 and actions:
                     print(
@@ -817,6 +828,7 @@ def main() -> None:
     agent_name = os.environ.get("AK_AGENT_NAME", "openclaw")
     rules_dir = os.environ.get("AK_RULES_DIR")
     api_key = os.environ.get("AK_API_KEY")
+    exclusions_file = os.environ.get("AK_EXCLUSIONS_FILE")
     oc_dir_env = os.environ.get("AK_OPENCLAW_DIR")
     openclaw_dir = Path(oc_dir_env) if oc_dir_env else None
 
@@ -828,6 +840,7 @@ def main() -> None:
             agent_name=agent_name,
             rules_dir=rules_dir,
             api_key=api_key,
+            exclusions_file=exclusions_file,
         )
     else:
         check(
@@ -835,6 +848,7 @@ def main() -> None:
             agent_name=agent_name,
             rules_dir=rules_dir,
             api_key=api_key,
+            exclusions_file=exclusions_file,
         )
 
 
