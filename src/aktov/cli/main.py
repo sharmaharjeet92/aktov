@@ -4,7 +4,8 @@ Commands::
 
     aktov init <framework>     — set up Aktov for your framework
     aktov scan trace.json      — evaluate traces against detection rules
-    aktov report               — show alerts from latest Claude Code session
+    aktov report               — show alerts from latest session trace
+    aktov watch                — real-time monitoring of OpenClaw sessions
     aktov preview              — preview what data would be sent to cloud
 """
 
@@ -27,6 +28,7 @@ from aktov.semantic_flags import extract_semantic_flags
 
 INIT_SNIPPETS = {
     "claude-code": None,  # handled specially — writes config file
+    "openclaw": None,  # handled specially — writes skill file
     "openai-agents": '''\
 Add these lines to your agent code:
 
@@ -133,6 +135,71 @@ def _init_claude_code() -> None:
     print("    $ export AK_API_KEY=ak_...")
 
 
+OPENCLAW_SKILL_MD = """\
+---
+name: aktov-guard
+description: Security monitoring for this agent. Scans tool calls for anomalies.
+version: 1.0.0
+author: aktov
+requires:
+  bins:
+    - python3
+  env: []
+---
+
+# Aktov Guard
+
+You have a security monitoring tool installed. After completing a task that involved
+running commands (especially file operations, network requests, or system commands),
+run a security check:
+
+```bash
+python3 -m aktov.hooks.openclaw check
+```
+
+Run this check:
+- After completing multi-step tasks
+- After running commands that access files or network
+- When the user asks about security or safety
+- At the end of each conversation
+
+The command scans your recent actions and reports any security concerns.
+It runs locally and takes under a second.
+"""
+
+
+def _init_openclaw() -> None:
+    """Create the aktov-guard skill in the OpenClaw workspace."""
+    skill_dir = Path.home() / ".openclaw" / "workspace" / "skills" / "aktov-guard"
+    skill_file = skill_dir / "SKILL.md"
+
+    # Check if already configured
+    if skill_file.exists():
+        content = skill_file.read_text()
+        if "aktov" in content.lower():
+            print("  Aktov skill already installed at ~/.openclaw/workspace/skills/aktov-guard/")
+            return
+
+    skill_dir.mkdir(parents=True, exist_ok=True)
+    skill_file.write_text(OPENCLAW_SKILL_MD)
+
+    print("  Created skill: ~/.openclaw/workspace/skills/aktov-guard/SKILL.md")
+    print()
+    print("  Aktov will now monitor OpenClaw tool calls.")
+    print()
+    print("  Start real-time monitoring:")
+    print("    $ aktov watch")
+    print()
+    print("  Or review after a session:")
+    print("    $ aktov report")
+    print()
+    print("  For instant event-driven monitoring:")
+    print("    $ pip install aktov[openclaw]")
+    print()
+    print("  To connect to cloud (full ruleset + dashboard):")
+    print("    $ export AK_API_KEY=ak_...")
+
+
 def cmd_init(args: argparse.Namespace) -> None:
     """Execute the ``init`` command."""
     framework = args.framework
@@ -147,6 +214,8 @@ def cmd_init(args: argparse.Namespace) -> None:
 
     if framework == "claude-code":
         _init_claude_code()
+    elif framework == "openclaw":
+        _init_openclaw()
     else:
         print(INIT_SNIPPETS[framework])
 
@@ -159,12 +228,12 @@ def cmd_init(args: argparse.Namespace) -> None:
 # ---------------------------------------------------------------------------
 
 def cmd_report(args: argparse.Namespace) -> None:
-    """Show alerts from the latest Claude Code session trace."""
+    """Show alerts from the latest session trace."""
     traces_dir = Path.home() / ".aktov" / "traces"
 
     if not traces_dir.exists():
         print("\n  No session traces found.")
-        print("  Run `aktov init claude-code` to start monitoring.\n")
+        print("  Run `aktov init claude-code` or `aktov init openclaw` to start monitoring.\n")
         return
 
     # Find the most recent trace file
@@ -190,9 +259,10 @@ def cmd_report(args: argparse.Namespace) -> None:
         print("  (no actions recorded)\n")
         return
 
-    # Evaluate
+    # Evaluate — detect agent type from filename
     from aktov.client import Aktov
-    ak = Aktov(agent_id="claude-code", agent_type="claude-code")
+    agent_type = "openclaw" if trace_file.name.startswith("openclaw-") else "claude-code"
+    ak = Aktov(agent_id=agent_type, agent_type=agent_type)
     trace = ak.start_trace()
     for action in actions:
         trace.record_action(
@@ -221,6 +291,30 @@ def cmd_report(args: argparse.Namespace) -> None:
 
     _print_table(headers, rows)
     print()
+
+
+# ---------------------------------------------------------------------------
+# watch command
+# ---------------------------------------------------------------------------
+
+def cmd_watch(args: argparse.Namespace) -> None:
+    """Execute the ``watch`` command — real-time OpenClaw session monitoring."""
+    import os
+
+    from aktov.hooks.openclaw import watch
+
+    openclaw_dir = Path(args.openclaw_dir) if args.openclaw_dir else None
+    agent_name = os.environ.get("AK_AGENT_NAME", "openclaw")
+    rules_dir = os.environ.get("AK_RULES_DIR")
+    api_key = os.environ.get("AK_API_KEY")
+
+    watch(
+        openclaw_dir=openclaw_dir,
+        interval=args.interval,
+        agent_name=agent_name,
+        rules_dir=rules_dir,
+        api_key=api_key,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -438,7 +532,24 @@ def main(argv: list[str] | None = None) -> None:
     # report subcommand
     subparsers.add_parser(
         "report",
-        help="Show alerts from latest Claude Code session",
+        help="Show alerts from latest session trace",
+    )
+
+    # watch subcommand
+    watch_parser = subparsers.add_parser(
+        "watch",
+        help="Real-time monitoring of OpenClaw sessions",
+    )
+    watch_parser.add_argument(
+        "--interval",
+        type=float,
+        default=0.5,
+        help="Polling interval in seconds (default: 0.5)",
+    )
+    watch_parser.add_argument(
+        "--openclaw-dir",
+        default=None,
+        help="Path to OpenClaw home directory (default: ~/.openclaw)",
     )
 
     # scan subcommand
@@ -518,6 +629,8 @@ def main(argv: list[str] | None = None) -> None:
         cmd_init(parsed)
     elif parsed.command == "report":
         cmd_report(parsed)
+    elif parsed.command == "watch":
+        cmd_watch(parsed)
     elif parsed.command == "scan":
         cmd_scan(parsed)
     elif parsed.command == "preview":
