@@ -11,8 +11,8 @@ from aktov.schema import TraceResponse
 class TestCloudDown:
     """SDK should never crash when the cloud is unreachable."""
 
-    def test_end_returns_stub_when_cloud_unreachable(self) -> None:
-        """trace.end() returns a stub response with status='failed'."""
+    def test_end_returns_local_alerts_when_cloud_unreachable(self) -> None:
+        """trace.end() returns local evaluation results when cloud is down."""
         cw = Aktov(
             api_key="ak_test_key",
             agent_id="test-agent",
@@ -28,9 +28,9 @@ class TestCloudDown:
 
         assert isinstance(response, TraceResponse)
         assert response.trace_id is None
-        assert response.status == "failed"
-        assert response.error_code is not None
-        assert response.rules_evaluated == 0
+        assert response.status == "evaluated"  # local succeeded, cloud failed
+        assert response.error_code is not None  # cloud error recorded
+        assert response.rules_evaluated == 3  # bundled sample rules
 
     def test_end_raises_when_configured(self) -> None:
         """trace.end() raises when raise_on_error=True."""
@@ -68,8 +68,8 @@ class TestCloudDown:
 class TestBackgroundSender:
     """Tests for the background sender mode."""
 
-    def test_background_returns_queued(self) -> None:
-        """trace.end() returns immediately with status='queued'."""
+    def test_background_returns_queued_with_local_alerts(self) -> None:
+        """trace.end() returns immediately with status='queued' and local alerts."""
         cw = Aktov(
             api_key="ak_test_key",
             agent_id="test-agent",
@@ -86,6 +86,7 @@ class TestBackgroundSender:
 
         assert response.status == "queued"
         assert response.trace_id is None
+        assert response.rules_evaluated == 3  # local rules evaluated
         cw._bg_sender.shutdown()
 
     def test_background_drops_when_full(self) -> None:
@@ -100,9 +101,13 @@ class TestBackgroundSender:
             queue_size=2,
             flush_interval_ms=60000,
         )
-        # Stop the worker so it doesn't drain the queue during the test
+        # Fully stop the worker so it doesn't drain the queue during the test
         cw._bg_sender._stop.set()
-        time.sleep(0.05)
+        try:
+            cw._bg_sender._queue.put_nowait(None)  # wake worker from blocking get
+        except Exception:
+            pass
+        cw._bg_sender._thread.join(timeout=1.0)
 
         # Fill the queue
         trace1 = cw.start_trace()
