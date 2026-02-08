@@ -1,0 +1,192 @@
+"""LangChain callback handler integration for Aktov.
+
+Automatically captures tool invocations from LangChain agents via the
+standard callback mechanism.
+
+Usage::
+
+    from aktov.integrations.langchain import AktovCallback
+
+    cb = AktovCallback(aktov_agent_name="my-agent")
+    agent.invoke("do something", config={"callbacks": [cb]})
+    response = cb.end()  # → TraceResponse with alerts
+"""
+
+from __future__ import annotations
+
+import json
+import time
+from typing import Any
+from uuid import UUID
+
+from aktov.client import Aktov, Trace
+from aktov.schema import TraceResponse
+
+# Conditional import — LangChain may not be installed.
+try:
+    from langchain_core.callbacks import BaseCallbackHandler
+
+    _HAS_LANGCHAIN = True
+except ImportError:
+    _HAS_LANGCHAIN = False
+
+    # Provide a no-op base so the class definition doesn't fail at
+    # import time when langchain_core isn't available.
+    class BaseCallbackHandler:  # type: ignore[no-redef]
+        """Stub base class when langchain_core is not installed."""
+        pass
+
+
+class AktovCallbackHandler(BaseCallbackHandler):
+    """LangChain callback handler that records tool calls via Aktov.
+
+    This handler listens for ``on_tool_start`` and ``on_tool_end`` events
+    and records each tool invocation through the active :class:`Trace`.
+    """
+
+    def __init__(
+        self,
+        client: Aktov,
+        trace: Trace,
+    ) -> None:
+        if not _HAS_LANGCHAIN:
+            raise ImportError(
+                "langchain_core is required for the LangChain integration. "
+                "Install it with: pip install langchain-core"
+            )
+        super().__init__()
+        self._client = client
+        self._trace = trace
+        self._pending_starts: dict[str, dict[str, Any]] = {}
+
+    # ------------------------------------------------------------------
+    # Callback methods
+    # ------------------------------------------------------------------
+
+    def on_tool_start(
+        self,
+        serialized: dict[str, Any],
+        input_str: str,
+        *,
+        run_id: UUID,
+        parent_run_id: UUID | None = None,
+        tags: list[str] | None = None,
+        metadata: dict[str, Any] | None = None,
+        inputs: dict[str, Any] | None = None,
+        **kwargs: Any,
+    ) -> None:
+        """Record the start of a tool invocation."""
+        tool_name = serialized.get("name", "unknown_tool")
+
+        # Try to parse input_str as JSON for argument extraction
+        arguments: dict[str, Any] | None = None
+        if inputs is not None:
+            arguments = inputs
+        else:
+            try:
+                arguments = json.loads(input_str)
+                if not isinstance(arguments, dict):
+                    arguments = {"input": input_str}
+            except (json.JSONDecodeError, TypeError):
+                arguments = {"input": input_str}
+
+        self._pending_starts[str(run_id)] = {
+            "tool_name": tool_name,
+            "arguments": arguments,
+            "start_time": time.monotonic(),
+        }
+
+    def on_tool_end(
+        self,
+        output: str,
+        *,
+        run_id: UUID,
+        parent_run_id: UUID | None = None,
+        **kwargs: Any,
+    ) -> None:
+        """Record the end of a tool invocation."""
+        run_key = str(run_id)
+        start_info = self._pending_starts.pop(run_key, None)
+
+        if start_info is None:
+            return
+
+        latency_ms = (time.monotonic() - start_info["start_time"]) * 1000
+
+        self._trace.record_action(
+            tool_name=start_info["tool_name"],
+            arguments=start_info["arguments"],
+            outcome={"status": "success"},
+            latency_ms=latency_ms,
+        )
+
+    def on_tool_error(
+        self,
+        error: BaseException,
+        *,
+        run_id: UUID,
+        parent_run_id: UUID | None = None,
+        **kwargs: Any,
+    ) -> None:
+        """Record a failed tool invocation."""
+        run_key = str(run_id)
+        start_info = self._pending_starts.pop(run_key, None)
+
+        if start_info is None:
+            return
+
+        latency_ms = (time.monotonic() - start_info["start_time"]) * 1000
+
+        self._trace.record_action(
+            tool_name=start_info["tool_name"],
+            arguments=start_info["arguments"],
+            outcome={"status": "error", "error_class": "internal_error"},
+            latency_ms=latency_ms,
+        )
+
+    # ------------------------------------------------------------------
+    # End trace
+    # ------------------------------------------------------------------
+
+    def end(self) -> TraceResponse:
+        """Finish the trace and return alerts.
+
+        Call this after the agent run is complete to evaluate
+        all recorded tool calls against detection rules.
+        """
+        return self._trace.end()
+
+
+def AktovCallback(  # noqa: N802
+    aktov_agent_name: str,
+    *,
+    api_key: str | None = None,
+    agent_type: str = "langchain",
+    **kwargs: Any,
+) -> AktovCallbackHandler:
+    """Create a ready-to-use LangChain callback handler with Aktov tracing.
+
+    Parameters
+    ----------
+    aktov_agent_name:
+        Name for the agent being traced (required).
+    api_key:
+        Aktov API key. Optional — omit for local-only evaluation.
+    agent_type:
+        Agent framework type (default ``"langchain"``).
+    **kwargs:
+        Additional keyword arguments passed to :class:`Aktov`.
+
+    Returns
+    -------
+    AktovCallbackHandler
+        A callback handler that auto-records tool calls and evaluates
+        detection rules on ``end()``.
+    """
+    client = Aktov(api_key=api_key, agent_id=aktov_agent_name, agent_type=agent_type, **kwargs)
+    trace = client.start_trace(agent_id=aktov_agent_name, agent_type=agent_type)
+    return AktovCallbackHandler(client=client, trace=trace)
+
+
+# Backward compat alias
+callback = AktovCallback

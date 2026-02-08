@@ -1,1 +1,0 @@
-"""Aktov webhook delivery."""
