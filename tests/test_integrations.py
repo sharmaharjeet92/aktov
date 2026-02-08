@@ -9,7 +9,7 @@ import json
 import os
 import tempfile
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
 import pytest
@@ -870,8 +870,6 @@ class TestCLIInit:
 
     def test_init_openclaw_idempotent(self, capsys: pytest.CaptureFixture) -> None:
         """Running aktov init openclaw twice doesn't overwrite."""
-        from unittest.mock import patch
-
         from aktov.cli.main import _init_openclaw
 
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -881,3 +879,191 @@ class TestCLIInit:
 
             captured = capsys.readouterr()
             assert "already installed" in captured.out
+
+
+# ---------------------------------------------------------------------------
+# Watcher service install tests
+# ---------------------------------------------------------------------------
+
+class TestWatcherInstall:
+    """Tests for aktov watch --install / --uninstall / --status."""
+
+    def test_install_launchd_creates_plist(self) -> None:
+        """_install_launchd writes a plist with correct content."""
+        from aktov.hooks.openclaw import _LAUNCHD_LABEL, _install_launchd
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            fake_home = Path(tmpdir)
+            plist_dir = fake_home / "Library" / "LaunchAgents"
+            plist_file = plist_dir / f"{_LAUNCHD_LABEL}.plist"
+
+            aktov_bin = "/usr/local/bin/aktov"
+            with (
+                patch.object(Path, "home", return_value=fake_home),
+                patch("aktov.hooks.openclaw.subprocess.run"),
+                patch("aktov.hooks.openclaw._get_aktov_executable", return_value=aktov_bin),
+            ):
+                _install_launchd(interval=0.5)
+
+            assert plist_file.exists()
+            content = plist_file.read_text()
+            assert "<string>io.aktov.watch</string>" in content
+            assert f"<string>{aktov_bin}</string>" in content
+            assert "<key>RunAtLoad</key>" in content
+            assert "<key>KeepAlive</key>" in content
+            assert "<string>0.5</string>" in content
+
+            # Log dir created
+            assert (fake_home / ".aktov" / "logs").is_dir()
+
+    def test_install_launchd_idempotent(self, capsys: pytest.CaptureFixture) -> None:
+        """Second install prints 'already installed' and returns."""
+        from aktov.hooks.openclaw import _LAUNCHD_LABEL, _install_launchd
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            fake_home = Path(tmpdir)
+            plist_dir = fake_home / "Library" / "LaunchAgents"
+            plist_dir.mkdir(parents=True)
+            plist_file = plist_dir / f"{_LAUNCHD_LABEL}.plist"
+            plist_file.write_text("<plist>existing</plist>")
+
+            with (
+                patch.object(Path, "home", return_value=fake_home),
+                patch("aktov.hooks.openclaw.subprocess.run") as mock_run,
+            ):
+                _install_launchd(interval=0.5)
+
+            captured = capsys.readouterr()
+            assert "Already installed" in captured.err
+            # Should not have called launchctl
+            mock_run.assert_not_called()
+
+    def test_install_systemd_creates_unit(self) -> None:
+        """_install_systemd writes a unit file with correct content."""
+        from aktov.hooks.openclaw import _SYSTEMD_UNIT, _install_systemd
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            fake_home = Path(tmpdir)
+            unit_dir = fake_home / ".config" / "systemd" / "user"
+            unit_file = unit_dir / _SYSTEMD_UNIT
+
+            aktov_bin = "/usr/local/bin/aktov"
+            with (
+                patch.object(Path, "home", return_value=fake_home),
+                patch("aktov.hooks.openclaw.subprocess.run") as mock_run,
+                patch("aktov.hooks.openclaw._get_aktov_executable", return_value=aktov_bin),
+            ):
+                _install_systemd(interval=1.0)
+
+            assert unit_file.exists()
+            content = unit_file.read_text()
+            assert f"ExecStart={aktov_bin} watch --interval 1.0" in content
+            assert "Restart=on-failure" in content
+            assert "WantedBy=default.target" in content
+
+            # Should have called daemon-reload and enable
+            assert mock_run.call_count == 2
+
+    def test_uninstall_launchd_removes_plist(self) -> None:
+        """_uninstall_launchd removes plist and calls launchctl unload."""
+        from aktov.hooks.openclaw import _LAUNCHD_LABEL, _uninstall_launchd
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            fake_home = Path(tmpdir)
+            plist_dir = fake_home / "Library" / "LaunchAgents"
+            plist_dir.mkdir(parents=True)
+            plist_file = plist_dir / f"{_LAUNCHD_LABEL}.plist"
+            plist_file.write_text("<plist>content</plist>")
+
+            with (
+                patch.object(Path, "home", return_value=fake_home),
+                patch("aktov.hooks.openclaw.subprocess.run") as mock_run,
+            ):
+                _uninstall_launchd()
+
+            assert not plist_file.exists()
+            mock_run.assert_called_once()
+            assert "unload" in mock_run.call_args[0][0]
+
+    def test_uninstall_systemd_removes_unit(self) -> None:
+        """_uninstall_systemd removes unit file and disables service."""
+        from aktov.hooks.openclaw import _SYSTEMD_UNIT, _uninstall_systemd
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            fake_home = Path(tmpdir)
+            unit_dir = fake_home / ".config" / "systemd" / "user"
+            unit_dir.mkdir(parents=True)
+            unit_file = unit_dir / _SYSTEMD_UNIT
+            unit_file.write_text("[Unit]\n")
+
+            with (
+                patch.object(Path, "home", return_value=fake_home),
+                patch("aktov.hooks.openclaw.subprocess.run") as mock_run,
+            ):
+                _uninstall_systemd()
+
+            assert not unit_file.exists()
+            # disable --now + daemon-reload
+            assert mock_run.call_count == 2
+
+    def test_install_unsupported_platform(self, capsys: pytest.CaptureFixture) -> None:
+        """Unsupported platform prints helpful error."""
+        from aktov.hooks.openclaw import install_watcher
+
+        with patch("aktov.hooks.openclaw.platform.system", return_value="Windows"):
+            install_watcher()
+
+        captured = capsys.readouterr()
+        assert "Unsupported platform" in captured.err
+        assert "Manual setup" in captured.err
+
+    def test_install_dispatcher_darwin(self) -> None:
+        """install_watcher dispatches to _install_launchd on Darwin."""
+        from aktov.hooks.openclaw import install_watcher
+
+        with (
+            patch("aktov.hooks.openclaw.platform.system", return_value="Darwin"),
+            patch("aktov.hooks.openclaw._install_launchd") as mock_launchd,
+        ):
+            install_watcher(interval=2.0)
+
+        mock_launchd.assert_called_once_with(2.0)
+
+    def test_install_dispatcher_linux(self) -> None:
+        """install_watcher dispatches to _install_systemd on Linux."""
+        from aktov.hooks.openclaw import install_watcher
+
+        with (
+            patch("aktov.hooks.openclaw.platform.system", return_value="Linux"),
+            patch("aktov.hooks.openclaw._install_systemd") as mock_systemd,
+        ):
+            install_watcher(interval=1.5)
+
+        mock_systemd.assert_called_once_with(1.5)
+
+    def test_cli_watch_install_flag(self) -> None:
+        """aktov watch --install dispatches to install_watcher."""
+        from aktov.cli.main import main
+
+        with patch("aktov.hooks.openclaw.install_watcher") as mock_install:
+            main(["watch", "--install"])
+
+        mock_install.assert_called_once_with(interval=0.5)
+
+    def test_cli_watch_uninstall_flag(self) -> None:
+        """aktov watch --uninstall dispatches to uninstall_watcher."""
+        from aktov.cli.main import main
+
+        with patch("aktov.hooks.openclaw.uninstall_watcher") as mock_uninstall:
+            main(["watch", "--uninstall"])
+
+        mock_uninstall.assert_called_once()
+
+    def test_cli_watch_status_flag(self) -> None:
+        """aktov watch --status dispatches to status_watcher."""
+        from aktov.cli.main import main
+
+        with patch("aktov.hooks.openclaw.status_watcher") as mock_status:
+            main(["watch", "--status"])
+
+        mock_status.assert_called_once()

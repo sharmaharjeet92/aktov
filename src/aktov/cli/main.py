@@ -301,7 +301,17 @@ def cmd_watch(args: argparse.Namespace) -> None:
     """Execute the ``watch`` command — real-time OpenClaw session monitoring."""
     import os
 
-    from aktov.hooks.openclaw import watch
+    from aktov.hooks.openclaw import install_watcher, status_watcher, uninstall_watcher, watch
+
+    if args.install:
+        install_watcher(interval=args.interval)
+        return
+    if args.uninstall:
+        uninstall_watcher()
+        return
+    if args.status:
+        status_watcher()
+        return
 
     openclaw_dir = Path(args.openclaw_dir) if args.openclaw_dir else None
     agent_name = os.environ.get("AK_AGENT_NAME", "openclaw")
@@ -550,6 +560,21 @@ def main(argv: list[str] | None = None) -> None:
         "--openclaw-dir",
         default=None,
         help="Path to OpenClaw home directory (default: ~/.openclaw)",
+    )
+    watch_parser.add_argument(
+        "--install",
+        action="store_true",
+        help="Install as background service (launchd on macOS, systemd on Linux)",
+    )
+    watch_parser.add_argument(
+        "--uninstall",
+        action="store_true",
+        help="Remove background service",
+    )
+    watch_parser.add_argument(
+        "--status",
+        action="store_true",
+        help="Check if background service is running",
     )
 
     # scan subcommand
