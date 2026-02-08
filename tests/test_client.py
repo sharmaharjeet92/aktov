@@ -1,6 +1,7 @@
 """Tests for aktov.client — Aktov client and Trace."""
 
 import pytest
+
 from aktov.client import Aktov, Trace
 from aktov.schema import ActionOutcome, SemanticFlags
 
