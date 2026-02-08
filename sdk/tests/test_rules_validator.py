@@ -3,6 +3,7 @@
 import importlib.resources
 
 import yaml
+
 from aktov.rules.validator import (
     ACTION_FIELDS,
     TRACE_LEVEL_FIELDS,

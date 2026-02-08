@@ -21,13 +21,21 @@ from aktov.client import Aktov
 from aktov.rules.engine import RuleEngine
 
 # parents[0]=tests/, parents[1]=sdk/, parents[2]=aktov/ (workspace root)
-RULES_DIR = str(Path(__file__).resolve().parents[2] / "rules" / "phase0")
+# This path only exists in the monorepo, not in the public SDK repo.
+RULES_DIR = Path(__file__).resolve().parents[2] / "rules" / "phase0"
+
+_skip_reason = "rules/phase0 not available (monorepo-only)"
+
+pytestmark = pytest.mark.skipif(
+    not RULES_DIR.is_dir(),
+    reason=_skip_reason,
+)
 
 
 @pytest.fixture
 def engine() -> RuleEngine:
     e = RuleEngine()
-    n = e.load_rules(RULES_DIR)
+    n = e.load_rules(str(RULES_DIR))
     assert n == 12, f"Expected 12 rules, loaded {n}"
     return e
 
