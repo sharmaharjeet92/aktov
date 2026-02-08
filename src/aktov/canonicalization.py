@@ -26,6 +26,11 @@ DEFAULT_TOOL_CATEGORY_MAP: dict[str, str] = {
     "execute_sql": "read",
     "sql_query": "read",
     "get_record": "read",
+    # Claude Code / agent IDE tools
+    "read": "read",
+    "glob": "read",
+    "grep": "read",
+    "taskoutput": "read",
     # Write operations
     "write_file": "write",
     "create_file": "write",
@@ -35,6 +40,10 @@ DEFAULT_TOOL_CATEGORY_MAP: dict[str, str] = {
     "insert_record": "write",
     "update_record": "write",
     "upsert_record": "write",
+    "write": "write",
+    "edit": "write",
+    "notebookedit": "write",
+    "todowrite": "write",
     # Execute operations
     "execute_code": "execute",
     "run_command": "execute",
@@ -43,6 +52,7 @@ DEFAULT_TOOL_CATEGORY_MAP: dict[str, str] = {
     "eval_code": "execute",
     "execute_python": "execute",
     "bash": "execute",
+    "skill": "execute",
     # Network operations
     "http_request": "network",
     "http_get": "network",
@@ -54,6 +64,8 @@ DEFAULT_TOOL_CATEGORY_MAP: dict[str, str] = {
     "webhook_call": "network",
     "api_call": "network",
     "fetch_url": "network",
+    "webfetch": "network",
+    "websearch": "network",
     # Credential operations
     "get_credentials": "credential",
     "get_secret": "credential",

