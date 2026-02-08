@@ -1,1 +1,1 @@
-"""Aktov hooks for external tool runners (Claude Code, etc.)."""
+"""Aktov hooks for external tool runners (Claude Code, OpenClaw, etc.)."""
