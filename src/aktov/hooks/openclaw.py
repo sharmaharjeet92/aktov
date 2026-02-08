@@ -31,8 +31,11 @@ from __future__ import annotations
 
 import json
 import os
+import platform
 import shlex
+import shutil
 import signal
+import subprocess
 import sys
 import time
 from datetime import UTC, datetime
@@ -590,6 +593,219 @@ def watch(
         f"[aktov] Stopped. {total_tool_calls} tool calls monitored, {total_alerts} alerts.",
         file=sys.stderr,
     )
+
+
+# ---------------------------------------------------------------------------
+# Service installer (launchd / systemd)
+# ---------------------------------------------------------------------------
+
+_LAUNCHD_LABEL = "io.aktov.watch"
+_SYSTEMD_UNIT = "aktov-watch.service"
+
+_LAUNCHD_PLIST = """\
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" \
+"http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>{label}</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>{aktov_path}</string>
+        <string>watch</string>
+        <string>--interval</string>
+        <string>{interval}</string>
+    </array>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>StandardOutPath</key>
+    <string>{log_path}</string>
+    <key>StandardErrorPath</key>
+    <string>{log_path}</string>
+</dict>
+</plist>
+"""
+
+_SYSTEMD_UNIT_TEMPLATE = """\
+[Unit]
+Description=Aktov OpenClaw Session Watcher
+After=default.target
+
+[Service]
+ExecStart={aktov_path} watch --interval {interval}
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target
+"""
+
+
+def _get_aktov_executable() -> str:
+    """Find the ``aktov`` binary path."""
+    path = shutil.which("aktov")
+    if path:
+        return path
+    return f"{sys.executable} -m aktov.cli.main"
+
+
+def _install_launchd(interval: float) -> None:
+    """Install the watcher as a macOS launchd agent."""
+    plist_dir = Path.home() / "Library" / "LaunchAgents"
+    plist_file = plist_dir / f"{_LAUNCHD_LABEL}.plist"
+
+    if plist_file.exists():
+        print(f"[aktov] Already installed: {plist_file}", file=sys.stderr)
+        print("[aktov] Use `aktov watch --status` or `--uninstall` first.", file=sys.stderr)
+        return
+
+    log_dir = Path.home() / ".aktov" / "logs"
+    log_dir.mkdir(parents=True, exist_ok=True)
+    log_path = log_dir / "watch.log"
+
+    aktov_path = _get_aktov_executable()
+
+    plist_content = _LAUNCHD_PLIST.format(
+        label=_LAUNCHD_LABEL,
+        aktov_path=aktov_path,
+        interval=str(interval),
+        log_path=str(log_path),
+    )
+
+    plist_dir.mkdir(parents=True, exist_ok=True)
+    plist_file.write_text(plist_content)
+
+    subprocess.run(["launchctl", "load", str(plist_file)], check=False)
+
+    print(f"[aktov] Installed: {plist_file}", file=sys.stderr)
+    print(f"[aktov] Logs: {log_path}", file=sys.stderr)
+    print("[aktov] Watcher will start now and on every login.", file=sys.stderr)
+
+
+def _uninstall_launchd() -> None:
+    """Remove the macOS launchd agent."""
+    plist_file = Path.home() / "Library" / "LaunchAgents" / f"{_LAUNCHD_LABEL}.plist"
+
+    if not plist_file.exists():
+        print("[aktov] Not installed (no plist found).", file=sys.stderr)
+        return
+
+    subprocess.run(["launchctl", "unload", str(plist_file)], check=False)
+    plist_file.unlink()
+    print("[aktov] Uninstalled. Watcher stopped.", file=sys.stderr)
+
+
+def _status_launchd() -> None:
+    """Check macOS launchd agent status."""
+    plist_file = Path.home() / "Library" / "LaunchAgents" / f"{_LAUNCHD_LABEL}.plist"
+
+    if not plist_file.exists():
+        print("[aktov] Not installed.", file=sys.stderr)
+        return
+
+    result = subprocess.run(
+        ["launchctl", "list", _LAUNCHD_LABEL],
+        capture_output=True, text=True,
+    )
+    if result.returncode == 0:
+        print(f"[aktov] Running (launchd label: {_LAUNCHD_LABEL})", file=sys.stderr)
+        for line in result.stdout.strip().splitlines():
+            print(f"  {line}", file=sys.stderr)
+    else:
+        print(f"[aktov] Installed but not running: {plist_file}", file=sys.stderr)
+
+
+def _install_systemd(interval: float) -> None:
+    """Install the watcher as a systemd user service."""
+    unit_dir = Path.home() / ".config" / "systemd" / "user"
+    unit_file = unit_dir / _SYSTEMD_UNIT
+
+    if unit_file.exists():
+        print(f"[aktov] Already installed: {unit_file}", file=sys.stderr)
+        print("[aktov] Use `aktov watch --status` or `--uninstall` first.", file=sys.stderr)
+        return
+
+    aktov_path = _get_aktov_executable()
+
+    unit_content = _SYSTEMD_UNIT_TEMPLATE.format(
+        aktov_path=aktov_path,
+        interval=str(interval),
+    )
+
+    unit_dir.mkdir(parents=True, exist_ok=True)
+    unit_file.write_text(unit_content)
+
+    subprocess.run(["systemctl", "--user", "daemon-reload"], check=False)
+    subprocess.run(["systemctl", "--user", "enable", "--now", _SYSTEMD_UNIT], check=False)
+
+    print(f"[aktov] Installed: {unit_file}", file=sys.stderr)
+    print("[aktov] Watcher will start now and on every login.", file=sys.stderr)
+
+
+def _uninstall_systemd() -> None:
+    """Remove the systemd user service."""
+    unit_file = Path.home() / ".config" / "systemd" / "user" / _SYSTEMD_UNIT
+
+    if not unit_file.exists():
+        print("[aktov] Not installed (no unit file found).", file=sys.stderr)
+        return
+
+    subprocess.run(["systemctl", "--user", "disable", "--now", _SYSTEMD_UNIT], check=False)
+    unit_file.unlink()
+    subprocess.run(["systemctl", "--user", "daemon-reload"], check=False)
+    print("[aktov] Uninstalled. Watcher stopped.", file=sys.stderr)
+
+
+def _status_systemd() -> None:
+    """Check systemd user service status."""
+    unit_file = Path.home() / ".config" / "systemd" / "user" / _SYSTEMD_UNIT
+
+    if not unit_file.exists():
+        print("[aktov] Not installed.", file=sys.stderr)
+        return
+
+    result = subprocess.run(
+        ["systemctl", "--user", "status", _SYSTEMD_UNIT],
+        capture_output=True, text=True,
+    )
+    print(result.stdout or result.stderr, file=sys.stderr)
+
+
+def install_watcher(interval: float = 0.5) -> None:
+    """Install the watcher as a background service (launchd or systemd)."""
+    system = platform.system()
+    if system == "Darwin":
+        _install_launchd(interval)
+    elif system == "Linux":
+        _install_systemd(interval)
+    else:
+        print(f"[aktov] Unsupported platform: {system}", file=sys.stderr)
+        print("[aktov] Manual setup: run `aktov watch` in a background process.", file=sys.stderr)
+
+
+def uninstall_watcher() -> None:
+    """Remove the background watcher service."""
+    system = platform.system()
+    if system == "Darwin":
+        _uninstall_launchd()
+    elif system == "Linux":
+        _uninstall_systemd()
+    else:
+        print(f"[aktov] Unsupported platform: {system}", file=sys.stderr)
+
+
+def status_watcher() -> None:
+    """Check the background watcher service status."""
+    system = platform.system()
+    if system == "Darwin":
+        _status_launchd()
+    elif system == "Linux":
+        _status_systemd()
+    else:
+        print(f"[aktov] Unsupported platform: {system}", file=sys.stderr)
 
 
 # ---------------------------------------------------------------------------
